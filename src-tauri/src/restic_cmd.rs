@@ -1,13 +1,63 @@
 use crate::config::{exe_dir, Config, PasswordMode, RepoConfig};
 use crate::restic_bin;
 use crate::ssh;
+use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotRow {
+    pub id: String,
+    pub time: String,
+    pub hostname: String,
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ResticSnapshot {
+    #[serde(default)]
+    short_id: String,
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    time: String,
+    #[serde(default)]
+    hostname: String,
+    #[serde(default)]
+    paths: Vec<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+}
 
 pub fn find_repo<'a>(cfg: &'a Config, name: &str) -> Result<&'a RepoConfig, String> {
     cfg.repos
         .iter()
         .find(|r| r.name == name)
         .ok_or_else(|| format!("unknown repo '{name}'"))
+}
+
+pub fn list_snapshots(cfg: &Config, repo_name: &str) -> Result<Vec<SnapshotRow>, String> {
+    let raw = run_restic(cfg, repo_name, &["snapshots", "--json"])?;
+    let parsed: Vec<ResticSnapshot> = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("failed to parse snapshots JSON: {e}"))?;
+    Ok(parsed
+        .into_iter()
+        .map(|s| {
+            let id = if !s.short_id.is_empty() {
+                s.short_id
+            } else {
+                s.id
+            };
+            SnapshotRow {
+                id,
+                time: s.time,
+                hostname: s.hostname,
+                paths: s.paths,
+                tags: s.tags,
+            }
+        })
+        .collect())
 }
 
 pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String, String> {

@@ -4,6 +4,7 @@ mod restic_cmd;
 mod ssh;
 
 use config::Config;
+use restic_cmd::SnapshotRow;
 use serde::Serialize;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -35,6 +36,12 @@ fn list_repos() -> Result<Vec<RepoName>, String> {
 }
 
 #[tauri::command]
+fn list_snapshots(repo_name: String) -> Result<Vec<SnapshotRow>, String> {
+    let cfg = cached_config()?;
+    restic_cmd::list_snapshots(cfg, &repo_name)
+}
+
+#[tauri::command]
 fn restic_version() -> Result<String, String> {
     let cfg = cached_config().ok();
     let bin = restic_bin::resolve_restic(cfg)?;
@@ -53,7 +60,11 @@ fn restic_version() -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![restic_version, list_repos])
+        .invoke_handler(tauri::generate_handler![
+            restic_version,
+            list_repos,
+            list_snapshots
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
