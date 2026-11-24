@@ -1,5 +1,7 @@
 mod config;
 mod restic_bin;
+mod restic_cmd;
+mod ssh;
 
 use config::Config;
 use serde::Serialize;

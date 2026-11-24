@@ -39,6 +39,29 @@ Resolution order:
 2. `restic` / `restic.exe` next to the `restarilo` executable
 3. `PATH`
 
+### SFTP and SSH keys
+
+Use restic’s `sftp:` backend. Host, user, and port come from the repo URL.
+
+Optional per-repo `ssh_key` (path relative to the executable directory, or absolute). Paths may contain spaces; on Windows, backslashes are fine. restarilo passes the key via restic `-o sftp.args=…` (not `RESTIC_SSH_COMMAND`, which restic does not read). A `.pub` file may sit next to the private key; only the private key is used for auth.
+
+Before each restic run, inherited `RESTIC_PASSWORD`, `RESTIC_PASSWORD_FILE`, and `RESTIC_PASSWORD_COMMAND` are cleared so only the repo’s configured password mode applies.
+
+```toml
+[[repos]]
+name = "nas"
+path = "sftp:user@nas.local:/restic/repo"
+password_file = "nas.pass"
+ssh_key = "id_ed25519"
+
+[[repos]]
+name = "lab"
+path = "/tmp/test-repo"
+insecure_no_password = true
+```
+
+See also the [restic SFTP documentation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#sftp).
+
 ## Dev
 
 ```bash
