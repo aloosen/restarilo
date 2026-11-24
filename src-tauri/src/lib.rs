@@ -1,10 +1,12 @@
 mod config;
 mod restic_bin;
 mod restic_cmd;
+mod restic_ls;
 mod ssh;
 
 use config::Config;
 use restic_cmd::SnapshotRow;
+use restic_ls::DirEntry;
 use serde::Serialize;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -46,6 +48,20 @@ async fn list_snapshots(repo_name: String) -> Result<Vec<SnapshotRow>, String> {
 }
 
 #[tauri::command]
+async fn list_dir(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+) -> Result<Vec<DirEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_ls::list_dir(cfg, &repo_name, &snapshot_id, &path)
+    })
+    .await
+    .map_err(|e| format!("list_dir task failed: {e}"))?
+}
+
+#[tauri::command]
 fn restic_version() -> Result<String, String> {
     let cfg = cached_config().ok();
     let bin = restic_bin::resolve_restic(cfg)?;
@@ -67,7 +83,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             restic_version,
             list_repos,
-            list_snapshots
+            list_snapshots,
+            list_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
