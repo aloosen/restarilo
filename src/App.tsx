@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import "./App.css";
 
 type RepoName = { name: string };
 
@@ -51,10 +52,10 @@ function App() {
   }, [selected]);
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 16 }}>
-      <h1 style={{ margin: "0 0 12px", fontSize: 18 }}>restarilo</h1>
+    <main className="app">
+      <h1>restarilo</h1>
 
-      <label style={{ display: "block", marginBottom: 12 }}>
+      <label className="app-repo">
         Repo{" "}
         <select
           value={selected}
@@ -69,23 +70,23 @@ function App() {
         </select>
       </label>
 
-      {error && <pre style={{ color: "crimson" }}>{error}</pre>}
-      {loading && <p>Loading snapshots…</p>}
+      {error && <pre className="app-error">{error}</pre>}
+      {loading && <p className="app-loading">Loading snapshots…</p>}
 
       {!loading && !error && (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <table className="app-table">
           <thead>
             <tr>
-              <th align="left">ID</th>
-              <th align="left">Time</th>
-              <th align="left">Host</th>
-              <th align="left">Paths</th>
+              <th>ID</th>
+              <th>Time</th>
+              <th>Host</th>
+              <th>Paths</th>
             </tr>
           </thead>
           <tbody>
             {snapshots.map((s) => (
               <tr key={s.id + s.time}>
-                <td style={{ fontFamily: "monospace" }}>{s.id}</td>
+                <td className="mono">{s.id}</td>
                 <td>{s.time}</td>
                 <td>{s.hostname}</td>
                 <td>{s.paths.join(", ")}</td>
