@@ -70,6 +70,7 @@ pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String
     cmd.env_remove("RESTIC_PASSWORD");
     cmd.env_remove("RESTIC_PASSWORD_FILE");
     cmd.env_remove("RESTIC_PASSWORD_COMMAND");
+    cmd.env_remove("RESTIC_REPOSITORY_FILE");
     cmd.env("RESTIC_REPOSITORY", &repo.path);
 
     match &mode {
@@ -117,6 +118,7 @@ pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String
 mod tests {
     use super::*;
     use crate::config::{ResticSection, RepoConfig};
+    use std::path::Path;
 
     #[test]
     fn parse_snapshot_without_tags_field() {
@@ -126,16 +128,29 @@ mod tests {
         assert_eq!(parsed[0].short_id, "abc123");
     }
 
+    #[derive(Deserialize)]
+    struct ExpectedIds {
+        local: String,
+        sftp: String,
+    }
+
     #[test]
     fn live_local_and_sftp_snapshots() {
-        let local = "/tmp/restarilo-z1/local-repo";
-        let sftp_path = "/tmp/restarilo-z1/sftp-repo";
-        let key = "/tmp/restarilo-z1/my keys/id_ed25519";
-        if !std::path::Path::new(local).exists() || !std::path::Path::new(sftp_path).exists() {
-            eprintln!("skip live fixtures (run Z1 setup first)");
-            return;
-        }
-        let user = std::env::var("USER").unwrap_or_else(|_| "andreas".into());
+        let fix = Path::new("/tmp/restarilo-z1");
+        let local = fix.join("local-repo");
+        let sftp_path = fix.join("sftp-repo");
+        let key = fix.join("my keys/id_ed25519");
+        let expected_path = fix.join("expected.json");
+        assert!(
+            local.exists() && sftp_path.exists() && key.exists() && expected_path.exists(),
+            "missing MVP fixtures under {} (see README MVP verification)",
+            fix.display()
+        );
+        let expected: ExpectedIds = serde_json::from_str(
+            &std::fs::read_to_string(&expected_path).expect("read expected.json"),
+        )
+        .expect("parse expected.json");
+        let user = std::env::var("USER").expect("USER");
         let cfg = Config {
             restic: ResticSection {
                 binary: Some("/usr/bin/restic".into()),
@@ -143,7 +158,7 @@ mod tests {
             repos: vec![
                 RepoConfig {
                     name: "local".into(),
-                    path: local.into(),
+                    path: local.to_string_lossy().into_owned(),
                     password_file: None,
                     password_command: None,
                     insecure_no_password: true,
@@ -151,25 +166,31 @@ mod tests {
                 },
                 RepoConfig {
                     name: "sftp".into(),
-                    path: format!("sftp:{user}@127.0.0.1:{sftp_path}"),
+                    path: format!(
+                        "sftp:{user}@127.0.0.1:{}",
+                        sftp_path.to_string_lossy()
+                    ),
                     password_file: None,
                     password_command: None,
                     insecure_no_password: true,
-                    ssh_key: Some(key.into()),
+                    ssh_key: Some(key.to_string_lossy().into_owned()),
                 },
             ],
         };
         let local_rows = list_snapshots(&cfg, "local").expect("local snapshots");
         assert!(
-            !local_rows.is_empty(),
-            "expected at least one local snapshot, got {local_rows:?}"
+            local_rows.iter().any(|r| r.id == expected.local || r.id.starts_with(&expected.local)),
+            "expected local snapshot {}, got {local_rows:?}",
+            expected.local
         );
         assert!(local_rows.iter().any(|r| r.tags.is_empty()));
         let sftp_rows = list_snapshots(&cfg, "sftp").expect("sftp snapshots");
         assert!(
-            !sftp_rows.is_empty(),
-            "expected at least one sftp snapshot, got {sftp_rows:?}"
+            sftp_rows
+                .iter()
+                .any(|r| r.id == expected.sftp || r.id.starts_with(&expected.sftp)),
+            "expected sftp snapshot {}, got {sftp_rows:?}",
+            expected.sftp
         );
-        assert!(!sftp_rows[0].id.is_empty() && !sftp_rows[0].time.is_empty());
     }
 }

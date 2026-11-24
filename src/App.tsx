@@ -29,15 +29,25 @@ function App() {
 
   useEffect(() => {
     if (!selected) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     invoke<SnapshotRow[]>("list_snapshots", { repoName: selected })
-      .then(setSnapshots)
-      .catch((e: unknown) => {
-        setSnapshots([]);
-        setError(String(e));
+      .then((rows) => {
+        if (!cancelled) setSnapshots(rows);
       })
-      .finally(() => setLoading(false));
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setSnapshots([]);
+          setError(String(e));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selected]);
 
   return (

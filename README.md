@@ -45,7 +45,7 @@ Use restic’s `sftp:` backend. Host, user, and port come from the repo URL.
 
 Optional per-repo `ssh_key` (path relative to the executable directory, or absolute). Paths may contain spaces; on Windows, backslashes are fine. restarilo passes the key via restic `-o sftp.args=…` (not `RESTIC_SSH_COMMAND`, which restic does not read). A `.pub` file may sit next to the private key; only the private key is used for auth.
 
-Before each restic run, inherited `RESTIC_PASSWORD`, `RESTIC_PASSWORD_FILE`, and `RESTIC_PASSWORD_COMMAND` are cleared so only the repo’s configured password mode applies.
+Before each restic run, inherited `RESTIC_PASSWORD`, `RESTIC_PASSWORD_FILE`, `RESTIC_PASSWORD_COMMAND`, and `RESTIC_REPOSITORY_FILE` are cleared so only the repo’s configured location and password mode apply.
 
 ```toml
 [[repos]]
@@ -76,8 +76,13 @@ restic -r "$FIX/local-repo" init --insecure-no-password
 restic -r "$FIX/local-repo" backup "$FIX/data" --insecure-no-password
 restic -r "$FIX/sftp-repo" init --insecure-no-password
 restic -r "$FIX/sftp-repo" backup "$FIX/data" --insecure-no-password
+LOCAL_ID=$(restic -r "$FIX/local-repo" snapshots --insecure-no-password --json | python -c 'import sys,json; print(json.load(sys.stdin)[0]["short_id"])')
+SFTP_ID=$(restic -r "$FIX/sftp-repo" snapshots --insecure-no-password --json | python -c 'import sys,json; print(json.load(sys.stdin)[0]["short_id"])')
+printf '{"local":"%s","sftp":"%s"}\n' "$LOCAL_ID" "$SFTP_ID" > "$FIX/expected.json"
 cd src-tauri && cargo test --lib live_local_and_sftp_snapshots -- --nocapture
 ```
+
+Missing fixtures fail the live test (no silent skip).
 
 ## Dev
 

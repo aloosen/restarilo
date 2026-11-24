@@ -36,9 +36,13 @@ fn list_repos() -> Result<Vec<RepoName>, String> {
 }
 
 #[tauri::command]
-fn list_snapshots(repo_name: String) -> Result<Vec<SnapshotRow>, String> {
-    let cfg = cached_config()?;
-    restic_cmd::list_snapshots(cfg, &repo_name)
+async fn list_snapshots(repo_name: String) -> Result<Vec<SnapshotRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_cmd::list_snapshots(cfg, &repo_name)
+    })
+    .await
+    .map_err(|e| format!("list_snapshots task failed: {e}"))?
 }
 
 #[tauri::command]
