@@ -4,6 +4,41 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
+## Configuration
+
+Search order for `config.toml`:
+
+1. Next to the `restarilo` executable
+2. `$XDG_CONFIG_HOME/restarilo/config.toml` when `XDG_CONFIG_HOME` is set
+3. `$HOME/.config/restarilo/config.toml` (Windows: `%APPDATA%\restarilo\config.toml`)
+
+Passwords are never stored as plaintext. Each `[[repos]]` entry must set **exactly one** of:
+
+- `password_file`
+- `password_command`
+- `insecure_no_password = true` (requires restic ≥ 0.17.0)
+
+### Example
+
+```toml
+[restic]
+# optional; after ~ expansion this path must be absolute
+# binary = "/usr/local/bin/restic"
+
+[[repos]]
+name = "local"
+path = "/var/backup/restic-repo"
+password_file = "repo.pass"
+```
+
+### Restic binary
+
+Resolution order:
+
+1. `[restic].binary` if set (must be absolute after `~` expansion)
+2. `restic` / `restic.exe` next to the `restarilo` executable
+3. `PATH`
+
 ## Dev
 
 ```bash
