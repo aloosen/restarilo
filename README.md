@@ -62,6 +62,23 @@ insecure_no_password = true
 
 See also the [restic SFTP documentation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#sftp).
 
+### MVP verification fixtures
+
+Manual success check (local + SFTP, snapshot without tags):
+
+```bash
+FIX=/tmp/restarilo-z1
+mkdir -p "$FIX/data" "$FIX/my keys"
+echo hello > "$FIX/data/file.txt"
+ssh-keygen -t ed25519 -f "$FIX/my keys/id_ed25519" -N ""
+# add "$FIX/my keys/id_ed25519.pub" to ~/.ssh/authorized_keys for localhost SFTP
+restic -r "$FIX/local-repo" init --insecure-no-password
+restic -r "$FIX/local-repo" backup "$FIX/data" --insecure-no-password
+restic -r "$FIX/sftp-repo" init --insecure-no-password
+restic -r "$FIX/sftp-repo" backup "$FIX/data" --insecure-no-password
+cd src-tauri && cargo test --lib live_local_and_sftp_snapshots -- --nocapture
+```
+
 ## Dev
 
 ```bash
