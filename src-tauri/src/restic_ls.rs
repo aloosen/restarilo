@@ -115,4 +115,78 @@ mod tests {
         assert_eq!(normalize_dir_path("/foo/"), "/foo");
         assert_eq!(normalize_dir_path("foo/bar"), "/foo/bar");
     }
+
+    #[test]
+    fn live_browse_local_and_sftp() {
+        use crate::config::{ResticSection, RepoConfig};
+        use crate::restic_cmd;
+        use std::path::Path;
+
+        let fix = Path::new("/tmp/restarilo-z1");
+        let local = fix.join("local-repo");
+        let sftp_path = fix.join("sftp-repo");
+        let key = fix.join("my keys/id_ed25519");
+        assert!(
+            local.exists() && sftp_path.exists() && key.exists(),
+            "missing MVP fixtures under {} (see README)",
+            fix.display()
+        );
+        let user = std::env::var("USER").expect("USER");
+        let cfg = Config {
+            restic: ResticSection {
+                binary: Some("/usr/bin/restic".into()),
+            },
+            repos: vec![
+                RepoConfig {
+                    name: "local".into(),
+                    path: local.to_string_lossy().into_owned(),
+                    password_file: None,
+                    password_command: None,
+                    insecure_no_password: true,
+                    ssh_key: None,
+                },
+                RepoConfig {
+                    name: "sftp".into(),
+                    path: format!("sftp:{user}@127.0.0.1:{}", sftp_path.to_string_lossy()),
+                    password_file: None,
+                    password_command: None,
+                    insecure_no_password: true,
+                    ssh_key: Some(key.to_string_lossy().into_owned()),
+                },
+            ],
+        };
+
+        for repo in ["local", "sftp"] {
+            let snaps = restic_cmd::list_snapshots(&cfg, repo).expect("snapshots");
+            let snap = snaps.first().expect("snapshot");
+            let root = list_dir(&cfg, repo, &snap.id, "/").expect("root ls");
+            assert!(!root.is_empty(), "{repo} root empty");
+            let dir = root.iter().find(|e| e.is_dir).expect("dir at root");
+            let child = list_dir(&cfg, repo, &snap.id, &dir.path).expect("child ls");
+            assert!(
+                child.iter().any(|e| e.is_dir || !e.is_dir),
+                "{repo} child listing empty"
+            );
+            // walk until a file appears (fixture: …/data/file.txt)
+            let mut path = dir.path.clone();
+            let mut saw_file = false;
+            for _ in 0..8 {
+                let entries = list_dir(&cfg, repo, &snap.id, &path).expect("walk");
+                if let Some(f) = entries.iter().find(|e| !e.is_dir) {
+                    saw_file = true;
+                    assert!(!f.name.is_empty());
+                    break;
+                }
+                if let Some(d) = entries.iter().find(|e| e.is_dir) {
+                    path = d.path.clone();
+                    continue;
+                }
+                break;
+            }
+            assert!(saw_file, "{repo}: expected a file under snapshot");
+        }
+
+        let err = list_dir(&cfg, "local", "deadbeefdeadbeefdeadbeefdeadbeef", "/");
+        assert!(err.is_err(), "bogus snapshot should fail");
+    }
 }
