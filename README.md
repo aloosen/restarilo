@@ -4,6 +4,8 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
+Select a snapshot to browse its file tree (folders and files via `restic ls`).
+
 ## Configuration
 
 Search order for `config.toml`:

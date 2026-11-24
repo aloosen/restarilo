@@ -1,21 +1,18 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { FileBrowser } from "./FileBrowser";
+import { SnapshotList, type SnapshotRow } from "./SnapshotList";
 
 type RepoName = { name: string };
 
-type SnapshotRow = {
-  id: string;
-  time: string;
-  hostname: string;
-  paths: string[];
-  tags: string[];
-};
-
 function App() {
   const [repos, setRepos] = useState<RepoName[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selectedRepo, setSelectedRepo] = useState("");
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotRow | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,33 +20,34 @@ function App() {
     invoke<RepoName[]>("list_repos")
       .then((list) => {
         setRepos(list);
-        if (list[0]) setSelected(list[0].name);
+        if (list[0]) setSelectedRepo(list[0].name);
       })
       .catch((e: unknown) => setError(String(e)));
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
-    let cancelled = false;
+    if (!selectedRepo) return;
+    let discarded = false;
+    setSelectedSnapshot(null);
     setLoading(true);
     setError(null);
-    invoke<SnapshotRow[]>("list_snapshots", { repoName: selected })
+    invoke<SnapshotRow[]>("list_snapshots", { repoName: selectedRepo })
       .then((rows) => {
-        if (!cancelled) setSnapshots(rows);
+        if (!discarded) setSnapshots(rows);
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
+        if (!discarded) {
           setSnapshots([]);
           setError(String(e));
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!discarded) setLoading(false);
       });
     return () => {
-      cancelled = true;
+      discarded = true;
     };
-  }, [selected]);
+  }, [selectedRepo]);
 
   return (
     <main className="app">
@@ -58,8 +56,8 @@ function App() {
       <label className="app-repo">
         Repo{" "}
         <select
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
+          value={selectedRepo}
+          onChange={(e) => setSelectedRepo(e.target.value)}
           disabled={repos.length === 0}
         >
           {repos.map((r) => (
@@ -70,31 +68,30 @@ function App() {
         </select>
       </label>
 
-      {error && <pre className="app-error">{error}</pre>}
-      {loading && <p className="app-loading">Loading snapshots…</p>}
-
-      {!loading && !error && (
-        <table className="app-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Time</th>
-              <th>Host</th>
-              <th>Paths</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snapshots.map((s) => (
-              <tr key={s.id + s.time}>
-                <td className="mono">{s.id}</td>
-                <td>{s.time}</td>
-                <td>{s.hostname}</td>
-                <td>{s.paths.join(", ")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="app-panes">
+        <section className="app-pane">
+          <h2>Snapshots</h2>
+          <SnapshotList
+            snapshots={snapshots}
+            selectedId={selectedSnapshot?.id ?? null}
+            loading={loading}
+            error={error}
+            onSelectSnapshot={setSelectedSnapshot}
+          />
+        </section>
+        <section className="app-pane">
+          <h2>Files</h2>
+          {selectedSnapshot ? (
+            <FileBrowser
+              key={`${selectedRepo}:${selectedSnapshot.id}`}
+              repoName={selectedRepo}
+              snapshotId={selectedSnapshot.id}
+            />
+          ) : (
+            <p className="app-loading">Select a snapshot to browse files.</p>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
