@@ -36,19 +36,28 @@ export function SnapshotList({
         </tr>
       </thead>
       <tbody>
-        {snapshots.map((s) => (
-          <tr
-            key={s.id}
-            className={selectedId === s.id ? "is-selected" : undefined}
-            onClick={() => onSelectSnapshot(s)}
-            style={{ cursor: "pointer" }}
-          >
-            <td className="mono">{s.short_id || s.id.slice(0, 8)}</td>
-            <td>{s.time}</td>
-            <td>{s.hostname}</td>
-            <td>{s.paths.join(", ")}</td>
-          </tr>
-        ))}
+        {snapshots.map((s) => {
+          const label = s.short_id || s.id.slice(0, 8);
+          const selected = selectedId === s.id;
+          return (
+            <tr key={s.id} className={selected ? "is-selected" : undefined}>
+              <td className="mono">
+                <button
+                  type="button"
+                  className="linkish"
+                  data-snapshot-id={s.id}
+                  aria-current={selected ? "true" : undefined}
+                  onClick={() => onSelectSnapshot(s)}
+                >
+                  {label}
+                </button>
+              </td>
+              <td>{s.time}</td>
+              <td>{s.hostname}</td>
+              <td>{s.paths.join(", ")}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

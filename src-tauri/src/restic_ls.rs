@@ -28,16 +28,21 @@ struct LsLine {
 }
 
 pub fn normalize_dir_path(path: &str) -> String {
-    let trimmed = path.trim();
-    if trimmed.is_empty() || trimmed == "/" {
+    // Do not trim whitespace — trailing/leading spaces can be part of names.
+    if path.is_empty() || path == "/" {
         return "/".into();
     }
-    let with_slash = if trimmed.starts_with('/') {
-        trimmed.to_string()
+    let with_slash = if path.starts_with('/') {
+        path.to_string()
     } else {
-        format!("/{trimmed}")
+        format!("/{path}")
     };
-    with_slash.trim_end_matches('/').to_string()
+    // Strip trailing slashes only (not spaces).
+    let mut end = with_slash.len();
+    while end > 1 && with_slash.as_bytes()[end - 1] == b'/' {
+        end -= 1;
+    }
+    with_slash[..end].to_string()
 }
 
 pub fn list_dir(
@@ -114,6 +119,8 @@ mod tests {
         assert_eq!(normalize_dir_path(""), "/");
         assert_eq!(normalize_dir_path("/foo/"), "/foo");
         assert_eq!(normalize_dir_path("foo/bar"), "/foo/bar");
+        assert_eq!(normalize_dir_path("/folder "), "/folder ");
+        assert_eq!(normalize_dir_path("/folder /"), "/folder ");
     }
 
     #[test]

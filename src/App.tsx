@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
@@ -15,6 +15,9 @@ function App() {
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const filesPaneRef = useRef<HTMLElement>(null);
+  const snapshotsPaneRef = useRef<HTMLElement>(null);
+  const returnFocusId = useRef<string | null>(null);
 
   useEffect(() => {
     invoke<RepoName[]>("list_repos")
@@ -49,8 +52,31 @@ function App() {
     };
   }, [selectedRepo]);
 
+  useEffect(() => {
+    if (!selectedSnapshot) return;
+    filesPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedSnapshot]);
+
+  function selectSnapshot(row: SnapshotRow) {
+    returnFocusId.current = row.id;
+    setSelectedSnapshot(row);
+  }
+
+  function backToSnapshots() {
+    const id = returnFocusId.current ?? selectedSnapshot?.id ?? null;
+    setSelectedSnapshot(null);
+    requestAnimationFrame(() => {
+      const root = snapshotsPaneRef.current;
+      if (!root || !id) return;
+      const btn = root.querySelector<HTMLButtonElement>(
+        `button[data-snapshot-id="${CSS.escape(id)}"]`,
+      );
+      btn?.focus();
+    });
+  }
+
   return (
-    <main className="app">
+    <main className={`app${selectedSnapshot ? " has-files" : ""}`}>
       <h1>restarilo</h1>
 
       <label className="app-repo">
@@ -69,27 +95,42 @@ function App() {
       </label>
 
       <div className="app-panes">
-        <section className="app-pane">
+        <section className="app-pane app-pane-snapshots" ref={snapshotsPaneRef}>
           <h2>Snapshots</h2>
-          <SnapshotList
-            snapshots={snapshots}
-            selectedId={selectedSnapshot?.id ?? null}
-            loading={loading}
-            error={error}
-            onSelectSnapshot={setSelectedSnapshot}
-          />
-        </section>
-        <section className="app-pane">
-          <h2>Files</h2>
-          {selectedSnapshot ? (
-            <FileBrowser
-              key={`${selectedRepo}:${selectedSnapshot.id}`}
-              repoName={selectedRepo}
-              snapshotId={selectedSnapshot.id}
+          <div className="app-pane-body">
+            <SnapshotList
+              snapshots={snapshots}
+              selectedId={selectedSnapshot?.id ?? null}
+              loading={loading}
+              error={error}
+              onSelectSnapshot={selectSnapshot}
             />
-          ) : (
-            <p className="app-loading">Select a snapshot to browse files.</p>
-          )}
+          </div>
+        </section>
+        <section className="app-pane app-pane-files" ref={filesPaneRef}>
+          <div className="app-pane-files-head">
+            <h2>Files</h2>
+            {selectedSnapshot && (
+              <button
+                type="button"
+                className="linkish app-back-snapshots"
+                onClick={backToSnapshots}
+              >
+                Snapshots
+              </button>
+            )}
+          </div>
+          <div className="app-pane-body app-pane-body-files">
+            {selectedSnapshot ? (
+              <FileBrowser
+                key={`${selectedRepo}:${selectedSnapshot.id}`}
+                repoName={selectedRepo}
+                snapshotId={selectedSnapshot.id}
+              />
+            ) : (
+              <p className="app-loading">Select a snapshot to browse files.</p>
+            )}
+          </div>
         </section>
       </div>
     </main>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export type DirEntry = {
@@ -17,7 +17,9 @@ type Props = {
 
 function parentPath(path: string): string {
   if (path === "/" || path === "") return "/";
-  const trimmed = path.replace(/\/+$/, "");
+  let end = path.length;
+  while (end > 1 && path.charAt(end - 1) === "/") end -= 1;
+  const trimmed = path.slice(0, end);
   const idx = trimmed.lastIndexOf("/");
   if (idx <= 0) return "/";
   return trimmed.slice(0, idx);
@@ -28,34 +30,47 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [selection, setSelection] = useState<Selection>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  /** Path whose listing is currently shown (set only when that request finishes). */
+  const [loadedPath, setLoadedPath] = useState<string | null>(null);
+  const upRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  /** Path we still owe focus to, once its listing has finished rendering. */
+  const pendingFocusPath = useRef<string | null>("/");
 
   useEffect(() => {
     setPath("/");
     setEntries([]);
     setSelection(null);
     setError(null);
+    setLoading(true);
+    setLoadedPath(null);
+    pendingFocusPath.current = "/";
   }, [repoName, snapshotId]);
 
   useEffect(() => {
     let discarded = false;
     setLoading(true);
+    setLoadedPath(null);
     setError(null);
     setEntries([]);
     setSelection(null);
+    const requestedPath = path;
     invoke<DirEntry[]>("list_dir", {
       repoName,
       snapshotId,
-      path,
+      path: requestedPath,
     })
       .then((rows) => {
-        if (!discarded) setEntries(rows);
+        if (discarded) return;
+        setEntries(rows);
+        setLoadedPath(requestedPath);
       })
       .catch((e: unknown) => {
-        if (!discarded) {
-          setEntries([]);
-          setError(String(e));
-        }
+        if (discarded) return;
+        setEntries([]);
+        setError(String(e));
+        setLoadedPath(requestedPath);
       })
       .finally(() => {
         if (!discarded) setLoading(false);
@@ -65,9 +80,35 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
     };
   }, [repoName, snapshotId, path]);
 
-  function onRowClick(entry: DirEntry) {
+  useEffect(() => {
+    if (loading) return;
+    if (loadedPath !== path) return;
+    if (pendingFocusPath.current !== path) return;
+    pendingFocusPath.current = null;
+
+    const atRoot = path === "/";
+    if (!atRoot && upRef.current && !upRef.current.disabled) {
+      upRef.current.focus();
+      return;
+    }
+    const first = listRef.current?.querySelector<HTMLButtonElement>("button.linkish");
+    if (first) {
+      first.focus();
+      return;
+    }
+    upRef.current?.focus();
+  }, [loading, loadedPath, path, entries, error]);
+
+  function navigateTo(next: string) {
+    pendingFocusPath.current = next;
+    setLoading(true);
+    setLoadedPath(null);
+    setPath(next);
+  }
+
+  function openEntry(entry: DirEntry) {
     if (entry.is_dir) {
-      setPath(entry.path);
+      navigateTo(entry.path);
       return;
     }
     setSelection({ path: entry.path, is_dir: false });
@@ -78,36 +119,50 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
   return (
     <section className="file-browser">
       <div className="file-browser-toolbar">
-        <button type="button" disabled={atRoot || loading} onClick={() => setPath(parentPath(path))}>
+        <button
+          ref={upRef}
+          type="button"
+          disabled={atRoot || loading}
+          onClick={() => navigateTo(parentPath(path))}
+        >
           Up
         </button>
         <span className="mono file-browser-path">{path}</span>
       </div>
-      {error && <pre className="app-error">{error}</pre>}
-      {loading && <p className="app-loading">Loading directory…</p>}
-      {!loading && !error && (
-        <table className="app-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr
-                key={e.path}
-                className={selection?.path === e.path ? "is-selected" : undefined}
-                onClick={() => onRowClick(e)}
-                style={{ cursor: "pointer" }}
-              >
-                <td className="mono">{e.name}</td>
-                <td>{e.is_dir ? "dir" : "file"}</td>
+      <div className="file-browser-body" ref={listRef}>
+        {error && <pre className="app-error">{error}</pre>}
+        {loading && <p className="app-loading">Loading directory…</p>}
+        {!loading && !error && (
+          <table className="app-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {entries.map((e) => {
+                const selected = selection?.path === e.path;
+                return (
+                  <tr key={e.path} className={selected ? "is-selected" : undefined}>
+                    <td className="mono">
+                      <button
+                        type="button"
+                        className="linkish"
+                        aria-current={selected ? "true" : undefined}
+                        onClick={() => openEntry(e)}
+                      >
+                        {e.name}
+                      </button>
+                    </td>
+                    <td>{e.is_dir ? "dir" : "file"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }
