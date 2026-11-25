@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { ArchiveMark } from "./ArchiveMark";
 import { BusyModal } from "./BusyModal";
+import { ExplorerChromeControls } from "./ExplorerChromeControls";
 import { FileBrowser } from "./FileBrowser";
 import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
-import { ShareAccessPanel } from "./ShareAccessPanel";
-import { SnapshotList } from "./SnapshotList";
+import { explorerEmptyMessage } from "./explorerEmptyMessage";
 import { useSnapshotLoad } from "./useSnapshotLoad";
 
 type RepoName = { name: string };
@@ -17,16 +18,6 @@ type HeldExplorer = {
   snapshotLabel: string;
 };
 
-function ArchiveMark() {
-  return (
-    <span className="app-brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" /><path d="M12 4v16" />
-      </svg>
-    </span>
-  );
-}
-
 function App() {
   const [repos, setRepos] = useState<RepoName[]>([]);
   const [reposReady, setReposReady] = useState(false);
@@ -34,8 +25,10 @@ function App() {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [actionId, setActionId] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [heldExplorer, setHeldExplorer] = useState<HeldExplorer | null>(null);
   const actionBusy = actionId !== null;
+  const chromeLocked = actionBusy || overwriteOpen;
   const {
     snapshots,
     selectedSnapshot,
@@ -114,20 +107,20 @@ function App() {
     if (!loading) setHeldExplorer(null);
   }, [liveRepo, liveSnapId, liveSnapLabel, loading]);
 
-  const showExplorer =
-    heldExplorer !== null && !snapError && !shareStatus;
-  const switching =
-    loading && liveSnapId === null && heldExplorer !== null;
+  const showExplorer = heldExplorer !== null && !snapError && !shareStatus;
+  const switching = loading && liveSnapId === null && heldExplorer !== null;
   const zeroRepos = reposReady && !configError && repos.length === 0;
   const topDirs = selectedSnapshot
     ? formatSnapshotTopDirs(selectedSnapshot.paths)
     : "";
 
-  let emptyMsg = "Loading snapshots…";
-  if (configError || zeroRepos) emptyMsg = "Configure a repository to browse snapshots.";
-  else if (shareStatus) emptyMsg = "Network share access required.";
-  else if (snapError) emptyMsg = "Could not load snapshots. Use Retry next to the snapshot control.";
-  else if (emptyRepo) emptyMsg = "No snapshots in this repository.";
+  const emptyMsg = explorerEmptyMessage({
+    configError,
+    zeroRepos,
+    shareStatus: !!shareStatus,
+    snapError: !!snapError,
+    emptyRepo,
+  });
 
   return (
     <main className="app">
@@ -144,47 +137,23 @@ function App() {
           {topDirs || "\u00a0"}
         </div>
         <div className="app-chrome-controls">
-          {configError ? (
-            <p className="app-error app-config-error">
-              Could not load configuration. Fix config.toml and restart restarilo.
-              {"\n"}{configError}
-            </p>
-          ) : zeroRepos ? (
-            <p className="app-loading">
-              No repositories configured. Add [[repos]] to config.toml and restart restarilo.
-            </p>
-          ) : (
-            <>
-              <label className="app-repo">
-                Repo{" "}
-                <select
-                  value={selectedRepo}
-                  onChange={(e) => onSelectRepo(e.target.value)}
-                  disabled={repos.length === 0 || actionBusy}
-                >
-                  {repos.map((r) => (
-                    <option key={r.name} value={r.name}>{r.name}</option>
-                  ))}
-                </select>
-              </label>
-              <SnapshotList
-                snapshots={snapshots}
-                selectedId={selectedSnapshot?.id ?? null}
-                loading={loading}
-                disabled={actionBusy}
-                listError={snapError}
-                onSelectId={selectSnapshotId}
-                onRetryList={retryList}
-              />
-              <ShareAccessPanel
-                status={shareStatus}
-                disabled={actionBusy || loading}
-                onSignIn={signIn}
-                onTryAnotherAccount={tryAnotherAccount}
-                onRetry={retryList}
-              />
-            </>
-          )}
+          <ExplorerChromeControls
+            configError={configError}
+            zeroRepos={zeroRepos}
+            repos={repos}
+            selectedRepo={selectedRepo}
+            onSelectRepo={onSelectRepo}
+            chromeLocked={chromeLocked}
+            snapshots={snapshots}
+            selectedSnapshotId={selectedSnapshot?.id ?? null}
+            loading={loading}
+            snapError={snapError}
+            onSelectSnapshotId={selectSnapshotId}
+            onRetryList={retryList}
+            shareStatus={shareStatus}
+            onSignIn={signIn}
+            onTryAnotherAccount={tryAnotherAccount}
+          />
         </div>
       </header>
       {actionBusy && (
@@ -208,8 +177,10 @@ function App() {
               snapshotId={heldExplorer.snapshotId}
               snapshotLabel={heldExplorer.snapshotLabel}
               actionBusy={actionBusy || switching}
+              overwriteOpen={overwriteOpen}
               onActionId={setActionId}
               onBusyLabel={setBusyLabel}
+              onOverwriteOpenChange={setOverwriteOpen}
             />
           </div>
         ) : (

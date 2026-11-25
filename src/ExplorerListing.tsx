@@ -24,8 +24,10 @@ type Props = {
   loadError: string | null;
   actionError: string | null;
   actionBusy: boolean;
+  overwriteOpen?: boolean;
   onActionId?: (id: string | null) => void;
   onBusyLabel?: (label: string | null) => void;
+  onOverwriteOpenChange?: (open: boolean) => void;
   onActionError: (message: string | null) => void;
   onSelect: (entry: DirEntry) => void;
   onNavigate: (path: string) => void;
@@ -52,7 +54,10 @@ export function ExplorerListing(p: Props) {
     p.onActionError(null);
   }, [p.selection?.path]);
 
+  const chromeLocked = p.actionBusy || !!p.overwriteOpen;
+
   function onSelect(entry: DirEntry) {
+    if (p.overwriteOpen) return;
     setSuccess(null);
     p.onActionError(null);
     p.onSelect(entry);
@@ -71,6 +76,7 @@ export function ExplorerListing(p: Props) {
                 <button
                   type="button"
                   className="linkish file-breadcrumb-btn"
+                  disabled={chromeLocked}
                   onClick={() => p.onNavigate(c.target)}
                 >
                   {c.label}
@@ -86,10 +92,11 @@ export function ExplorerListing(p: Props) {
             snapshotId={p.snapshotId}
             snapshotLabel={p.snapshotLabel}
             selection={p.listingReady ? p.selection : null}
-            disabled={!p.listingReady || p.actionBusy}
+            disabled={!p.listingReady || chromeLocked}
             actionBusy={p.actionBusy}
             onActionId={p.onActionId}
             onBusyLabel={p.onBusyLabel}
+            onOverwriteOpenChange={p.onOverwriteOpenChange}
             onSuccess={setSuccess}
             onError={p.onActionError}
           />
@@ -138,8 +145,12 @@ export function ExplorerListing(p: Props) {
               path={p.path}
               entries={p.entries}
               selectedPath={p.listingReady ? (p.selection?.path ?? null) : null}
-              onSelect={p.listingReady ? onSelect : () => {}}
-              onNavigate={p.listingReady ? p.onNavigate : () => {}}
+              onSelect={
+                p.listingReady && !p.overwriteOpen ? onSelect : () => {}
+              }
+              onNavigate={
+                p.listingReady && !chromeLocked ? p.onNavigate : () => {}
+              }
             />
           )}
         </div>

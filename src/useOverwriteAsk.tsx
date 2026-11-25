@@ -30,8 +30,19 @@ export function useOverwriteAsk() {
     return () => window.removeEventListener("keydown", onKey);
   }, [ask]);
 
+  useEffect(() => {
+    return () => {
+      const resolve = resolveRef.current;
+      resolveRef.current = null;
+      resolve?.(false);
+    };
+  }, []);
+
   function askOverwrite(next: OverwriteAsk): Promise<boolean> {
     return new Promise((resolve) => {
+      const prev = resolveRef.current;
+      resolveRef.current = null;
+      prev?.(false);
       resolveRef.current = resolve;
       setAsk(next);
     });

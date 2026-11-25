@@ -188,7 +188,7 @@ With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config
 4. **In-progress Cancel** (modal Cancel or Escape, only after Restoring… / Exporting… / Opening…): start Restore / Export / Open on `large.bin`, cancel while busy — modal closes without an error toast; prior success lines clear. Restore may leave partial files under the target. Open may leave a partial `restarilo-open-*` temp.
 5. **Export cancel with existing destination:** write known bytes to the export target path, start Export of `large.bin`, cancel — destination bytes unchanged; no leftover `.restarilo-dump-*` in the target folder. Overwrite confirm names source, snapshot, and destination and starts a **new** action id (Cancel enabled again for the second attempt).
 6. **Export publish safety (automated):** mid-export destination without overwrite and failed-replace preservation are covered by `cargo test --lib dump_publish` (publish helper); not a manual race.
-7. **Export overwrite confirm (manual):** with a file already at the export path, Export → confirm overwrite → succeeds and replaces; decline leaves the existing file unchanged.
+7. **Export overwrite confirm (manual):** with a file already at the export path, Export → confirm overwrite → succeeds and replaces; decline leaves the existing file unchanged. While the overwrite modal is open, repo/snapshot controls and listing selection are disabled; confirm starts a **new** action id (Cancel enabled again for the second attempt).
 8. Repeat Cancel checks on the SFTP repo.
 
 ## Icons (Tabler)
