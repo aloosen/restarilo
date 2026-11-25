@@ -5,7 +5,11 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const FORMAT_VERSION: u32 = 1;
+#[cfg(not(test))]
 const DISK_BUDGET: u64 = 256 * 1024 * 1024;
+/// Small budget in tests so eviction can be exercised without writing hundreds of MiB.
+#[cfg(test)]
+const DISK_BUDGET: u64 = 4 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct DiskListing {
@@ -62,6 +66,9 @@ impl TreeDiskCache {
     }
 
     pub fn put(&self, repo_id: &str, tree_id: &str, children: &[TreeChild]) {
+        if !is_tree_id(tree_id) {
+            return;
+        }
         let listing = DiskListing {
             format_version: FORMAT_VERSION,
             children: children
@@ -103,7 +110,13 @@ impl TreeDiskCache {
         let mut out = Vec::new();
         for ent in rd.flatten() {
             let path = ent.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Some(stem) = name.strip_suffix(".json") else {
+                continue;
+            };
+            if !is_tree_id(stem) {
                 continue;
             }
             let Ok(meta) = ent.metadata() else {
@@ -112,8 +125,7 @@ impl TreeDiskCache {
             if !meta.is_file() {
                 continue;
             }
-            let mtime = meta.modified().unwrap_or(UNIX_EPOCH);
-            out.push((path, meta.len(), mtime));
+            out.push((path, meta.len(), meta.modified().unwrap_or(UNIX_EPOCH)));
         }
         out
     }
@@ -136,6 +148,10 @@ impl TreeDiskCache {
     }
 }
 
+fn is_tree_id(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 fn touch_mtime(path: &Path) -> std::io::Result<()> {
     let file = fs::OpenOptions::new().write(true).open(path)?;
     file.set_modified(SystemTime::now())
@@ -144,7 +160,6 @@ fn touch_mtime(path: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn round_trip_and_ignore_junk() {
@@ -159,10 +174,52 @@ mod tests {
             size: None,
             subtree: Some("abc".into()),
         }];
-        cache.put("repo1", "tree1", &kids);
-        let got = cache.get("repo1", "tree1").unwrap();
+        let tid = "aa".repeat(32);
+        cache.put("repo1", &tid, &kids);
+        let got = cache.get("repo1", &tid).unwrap();
         assert_eq!(got[0].name, "a");
         assert!(dir.join("junk.bin").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn eviction_only_removes_valid_64hex_entries() {
+        let dir = std::env::temp_dir().join(format!("restarilo-disk-evict-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let repo_dir = dir.join("v1").join("repo1");
+        fs::create_dir_all(&repo_dir).unwrap();
+        // Short hex stem — must never be treated as a cache entry or deleted.
+        let foreign = repo_dir.join("deadbeef.json");
+        fs::write(&foreign, vec![b'x'; 128]).unwrap();
+        let cache = TreeDiskCache::open(dir.clone());
+        // Each listing is ~2 KiB; three exceed the 4 KiB test budget.
+        let bulky = "n".repeat(1800);
+        let mut tids = Vec::new();
+        for i in 0..3u8 {
+            let tid: String = format!("{i:02x}").repeat(32);
+            cache.put(
+                "repo1",
+                &tid,
+                &[TreeChild {
+                    name: bulky.clone(),
+                    is_dir: false,
+                    size: None,
+                    subtree: None,
+                }],
+            );
+            tids.push(tid);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(foreign.exists(), "deadbeef.json must survive eviction");
+        let present: usize = tids.iter().filter(|t| cache.get("repo1", t).is_some()).count();
+        assert!(
+            present < tids.len(),
+            "budget overflow must evict at least one valid entry (present={present})"
+        );
+        assert!(
+            present >= 1,
+            "at least one valid entry should remain after eviction"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -178,9 +235,9 @@ mod tests {
             size: None,
             subtree: None,
         }];
-        cache.put("repo1", "huge", &kids);
-        assert!(cache.get("repo1", "huge").is_none());
+        let tid = "cc".repeat(32);
+        cache.put("repo1", &tid, &kids);
+        assert!(cache.get("repo1", &tid).is_none());
         let _ = fs::remove_dir_all(&dir);
-        let _ = Duration::from_secs(0);
     }
 }

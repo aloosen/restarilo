@@ -1,7 +1,7 @@
 use crate::restic_cmd::SnapshotRow;
 use crate::tree_cache::{CachedListing, TreeCache};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 const MAX_CHILD_PREFETCH: usize = 4;
@@ -9,10 +9,12 @@ const MAX_CHILD_PREFETCH: usize = 4;
 struct State {
     queue: VecDeque<(u64, String, String)>,
     busy: bool,
+    user_active: u32,
 }
 
 pub struct PrefetchQueue {
     state: Mutex<State>,
+    wake: Condvar,
     cache: Arc<TreeCache>,
 }
 
@@ -22,13 +24,27 @@ impl PrefetchQueue {
             state: Mutex::new(State {
                 queue: VecDeque::new(),
                 busy: false,
+                user_active: 0,
             }),
+            wake: Condvar::new(),
             cache,
         })
     }
 
     pub fn clear(&self) {
         self.state.lock().unwrap().queue.clear();
+    }
+
+    pub fn user_enter(&self) {
+        self.state.lock().unwrap().user_active += 1;
+    }
+
+    pub fn user_leave(&self) {
+        let mut g = self.state.lock().unwrap();
+        g.user_active = g.user_active.saturating_sub(1);
+        if g.user_active == 0 {
+            self.wake.notify_all();
+        }
     }
 
     pub fn enqueue_newest_root(self: &Arc<Self>, generation: u64, repo: &str, rows: &[SnapshotRow]) {
@@ -79,6 +95,9 @@ impl PrefetchQueue {
         loop {
             let next = {
                 let mut g = self.state.lock().unwrap();
+                while g.user_active > 0 {
+                    g = self.wake.wait(g).unwrap();
+                }
                 match g.queue.pop_front() {
                     Some(item) => item,
                     None => {
@@ -96,9 +115,9 @@ impl PrefetchQueue {
 }
 
 pub fn newest_snapshot(rows: &[SnapshotRow]) -> Option<&SnapshotRow> {
-    let mut best: Option<(i64, usize)> = None;
+    let mut best: Option<(i128, usize)> = None;
     for (i, row) in rows.iter().enumerate() {
-        let Some(ts) = parse_rfc3339_secs(&row.time) else {
+        let Some(ts) = parse_rfc3339_nanos(&row.time) else {
             continue;
         };
         match best {
@@ -111,7 +130,7 @@ pub fn newest_snapshot(rows: &[SnapshotRow]) -> Option<&SnapshotRow> {
     best.map(|(_, i)| &rows[i])
 }
 
-fn parse_rfc3339_secs(s: &str) -> Option<i64> {
+fn parse_rfc3339_nanos(s: &str) -> Option<i128> {
     let s = s.trim();
     if s.len() < 19 || s.as_bytes().get(10) != Some(&b'T') {
         return None;
@@ -122,11 +141,24 @@ fn parse_rfc3339_secs(s: &str) -> Option<i64> {
     let h: i64 = s[11..13].parse().ok()?;
     let mi: i64 = s[14..16].parse().ok()?;
     let se: i64 = s[17..19].parse().ok()?;
-    let mut off = 0i64;
     let mut rest = &s[19..];
-    if rest.starts_with('.') {
-        rest = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
+    let mut frac_nanos: i128 = 0;
+    if let Some(stripped) = rest.strip_prefix('.') {
+        let digits: String = stripped.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if !digits.is_empty() {
+            let n = digits.len();
+            let mut padded = digits;
+            while padded.len() < 9 {
+                padded.push('0');
+            }
+            padded.truncate(9);
+            frac_nanos = padded.parse().ok()?;
+            rest = &stripped[n..];
+        } else {
+            rest = stripped;
+        }
     }
+    let mut off = 0i64;
     if let Some(sign) = rest.chars().next().filter(|c| *c == '+' || *c == '-') {
         let body = &rest[1..];
         let (oh, om): (i64, i64) = if body.len() >= 5 && body.as_bytes()[2] == b':' {
@@ -141,7 +173,8 @@ fn parse_rfc3339_secs(s: &str) -> Option<i64> {
             off = -off;
         }
     }
-    Some(days_from_civil(y, mo, d)? * 86400 + h * 3600 + mi * 60 + se - off * 60)
+    let secs = days_from_civil(y, mo, d)? * 86400 + h * 3600 + mi * 60 + se - off * 60;
+    Some(i128::from(secs) * 1_000_000_000 + frac_nanos)
 }
 
 fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
@@ -177,5 +210,23 @@ mod tests {
             mk("2024-01-01T10:00:00-05:00", "new"),
         ];
         assert_eq!(newest_snapshot(&rows).unwrap().tree, "new");
+    }
+
+    #[test]
+    fn newest_uses_fractional_seconds() {
+        let mk = |time: &str, tree: &str| SnapshotRow {
+            id: tree.into(),
+            short_id: tree.into(),
+            time: time.into(),
+            hostname: String::new(),
+            paths: vec![],
+            tags: vec![],
+            tree: tree.into(),
+        };
+        let rows = vec![
+            mk("2024-01-01T12:00:00.100Z", "earlier"),
+            mk("2024-01-01T12:00:00.200Z", "later"),
+        ];
+        assert_eq!(newest_snapshot(&rows).unwrap().tree, "later");
     }
 }

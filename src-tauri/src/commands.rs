@@ -85,18 +85,25 @@ pub async fn list_dir(
     let prefetch = state.prefetch.clone();
     let generation = cache.generation();
     tauri::async_runtime::spawn_blocking(move || {
-        let cfg = cached_config()?;
-        if cache.generation() != generation {
-            return Err("CANCELLED: stale cache generation".into());
-        }
-        let entries =
-            restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)?;
-        if let Some(tid) = crate::tree_walk::cached_tree_id_for_path(&cache, &snapshot_id, &path) {
-            if let Some(listing) = cache.get_cached(&tid) {
-                prefetch.enqueue_child_subtrees(generation, &repo_name, &listing);
+        prefetch.user_enter();
+        let result = (|| {
+            let cfg = cached_config()?;
+            if cache.generation() != generation {
+                return Err("CANCELLED: stale cache generation".into());
             }
-        }
-        Ok(entries)
+            let entries =
+                restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)?;
+            if let Some(tid) =
+                crate::tree_walk::cached_tree_id_for_path(&cache, &snapshot_id, &path)
+            {
+                if let Some(listing) = cache.get_cached(&tid) {
+                    prefetch.enqueue_child_subtrees(generation, &repo_name, &listing);
+                }
+            }
+            Ok(entries)
+        })();
+        prefetch.user_leave();
+        result
     })
     .await
     .map_err(|e| format!("list_dir task failed: {e}"))?

@@ -84,6 +84,42 @@ pub fn decode_restic_name(raw: &str) -> String {
                 out.push('\u{000c}');
                 i += 2;
             }
+            b'x' if i + 4 <= bytes.len() => {
+                if let Ok(v) = u8::from_str_radix(
+                    std::str::from_utf8(&bytes[i + 2..i + 4]).unwrap_or(""),
+                    16,
+                ) {
+                    out.push(char::from(v));
+                    i += 4;
+                } else {
+                    out.push('\\');
+                    i += 1;
+                }
+            }
+            b'u' if i + 6 <= bytes.len() => {
+                if let Ok(v) = u32::from_str_radix(
+                    std::str::from_utf8(&bytes[i + 2..i + 6]).unwrap_or(""),
+                    16,
+                ) {
+                    out.push(char::from_u32(v).unwrap_or('\u{FFFD}'));
+                    i += 6;
+                } else {
+                    out.push('\\');
+                    i += 1;
+                }
+            }
+            b'U' if i + 10 <= bytes.len() => {
+                if let Ok(v) = u32::from_str_radix(
+                    std::str::from_utf8(&bytes[i + 2..i + 10]).unwrap_or(""),
+                    16,
+                ) {
+                    out.push(char::from_u32(v).unwrap_or('\u{FFFD}'));
+                    i += 10;
+                } else {
+                    out.push('\\');
+                    i += 1;
+                }
+            }
             _ => {
                 out.push('\\');
                 i += 1;
@@ -169,6 +205,8 @@ mod tests {
         assert_eq!(decode_restic_name("say \\\"hi\\\""), "say \"hi\"");
         assert_eq!(decode_restic_name("a\\\\b"), "a\\b");
         assert_eq!(decode_restic_name("plain"), "plain");
+        assert_eq!(decode_restic_name("\\x7f"), "\u{7f}");
+        assert_eq!(decode_restic_name("\\u2028"), "\u{2028}");
     }
 
     #[test]

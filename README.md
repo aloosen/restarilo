@@ -39,11 +39,12 @@ that tree id; a changed tree in a later snapshot should append its id.
 ### Example
 
 ```toml
+# top-level (not under [restic])
+cache_dir = "cache/tree"
+
 [restic]
 # optional; after ~ expansion this path must be absolute
 # binary = "/usr/local/bin/restic"
-
-cache_dir = "cache/tree"
 
 [[repos]]
 name = "local"

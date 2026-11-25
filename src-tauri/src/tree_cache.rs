@@ -21,6 +21,7 @@ type FetchFn = Arc<dyn Fn(&str, &str) -> Result<Vec<TreeChild>, String> + Send +
 type Flight = Arc<(Mutex<FlightState>, Condvar)>;
 
 struct FlightState {
+    generation: u64,
     done: bool,
     result: Option<Result<CachedListing, String>>,
 }
@@ -156,37 +157,50 @@ impl TreeCache {
         repo: &str,
         tree_id: &str,
     ) -> Result<CachedListing, String> {
-        if let Some(hit) = self.get_cached(tree_id) {
-            return Ok(hit);
-        }
+        // Generation + memory hit under one lock (no stale cross-repo RAM hits).
         {
-            let g = self.inner.lock().unwrap();
-            if g.generation == generation {
-                if let (Some(disk), Some(rid)) = (g.disk.clone(), g.session_repo_id.clone()) {
-                    drop(g);
-                    if let Some(children) = disk.get(&rid, tree_id) {
-                        return self.insert_listing(generation, tree_id, children);
-                    }
-                }
-            }
-        }
-        let (slot, is_leader) = {
             let mut g = self.inner.lock().unwrap();
             if g.generation != generation {
                 return Err("CANCELLED: stale cache generation".into());
             }
             if let Some(hit) = g.entries.get(tree_id).cloned() {
+                Self::touch_lru(&mut g, tree_id);
                 return Ok(hit);
             }
+            let disk = g.disk.clone();
+            let rid = g.session_repo_id.clone();
+            drop(g);
+            if let (Some(disk), Some(rid)) = (disk, rid) {
+                if let Some(children) = disk.get(&rid, tree_id) {
+                    return self.insert_listing(generation, tree_id, children);
+                }
+            }
+        }
+        let (slot, is_leader, disk, rid, fetch) = {
+            let mut g = self.inner.lock().unwrap();
+            if g.generation != generation {
+                return Err("CANCELLED: stale cache generation".into());
+            }
+            if let Some(hit) = g.entries.get(tree_id).cloned() {
+                Self::touch_lru(&mut g, tree_id);
+                return Ok(hit);
+            }
+            let disk = g.disk.clone();
+            let rid = g.session_repo_id.clone();
+            let fetch = g.fetch.clone();
             if let Some(existing) = g.in_flight.get(tree_id).cloned() {
-                (existing, false)
+                let same_gen = existing.0.lock().unwrap().generation == generation;
+                if same_gen {
+                    (existing, false, disk, rid, fetch)
+                } else {
+                    let slot = Self::new_flight(generation);
+                    g.in_flight.insert(tree_id.to_string(), slot.clone());
+                    (slot, true, disk, rid, fetch)
+                }
             } else {
-                let slot = Arc::new((
-                    Mutex::new(FlightState { done: false, result: None }),
-                    Condvar::new(),
-                ));
+                let slot = Self::new_flight(generation);
                 g.in_flight.insert(tree_id.to_string(), slot.clone());
-                (slot, true)
+                (slot, true, disk, rid, fetch)
             }
         };
         if !is_leader {
@@ -199,16 +213,13 @@ impl TreeCache {
                 Err("CANCELLED: in-flight fetch missing result".into())
             });
         }
-        let fetch = self.inner.lock().unwrap().fetch.clone();
         let outcome = match fetch {
             Some(f) => match f(repo, tree_id) {
                 Ok(children) => {
-                    let (disk, rid) = {
-                        let g = self.inner.lock().unwrap();
-                        (g.disk.clone(), g.session_repo_id.clone())
-                    };
-                    if let (Some(disk), Some(rid)) = (disk, rid) {
-                        disk.put(&rid, tree_id, &children);
+                    if self.generation() == generation {
+                        if let (Some(disk), Some(rid)) = (disk, rid) {
+                            disk.put(&rid, tree_id, &children);
+                        }
                     }
                     self.insert_listing(generation, tree_id, children)
                 }
@@ -216,13 +227,29 @@ impl TreeCache {
             },
             None => Err("tree fetch not configured".into()),
         };
-        self.inner.lock().unwrap().in_flight.remove(tree_id);
+        {
+            let mut g = self.inner.lock().unwrap();
+            if g.in_flight.get(tree_id).is_some_and(|e| Arc::ptr_eq(e, &slot)) {
+                g.in_flight.remove(tree_id);
+            }
+        }
         let (lock, cvar) = &*slot;
         let mut guard = lock.lock().unwrap();
         guard.done = true;
         guard.result = Some(outcome.clone());
         cvar.notify_all();
         outcome
+    }
+
+    fn new_flight(generation: u64) -> Flight {
+        Arc::new((
+            Mutex::new(FlightState {
+                generation,
+                done: false,
+                result: None,
+            }),
+            Condvar::new(),
+        ))
     }
 }
 
