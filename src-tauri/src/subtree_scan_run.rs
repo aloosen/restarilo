@@ -25,9 +25,26 @@ impl Default for SpawnOpts {
 }
 
 fn kill_pid(pid: u32) {
-    let _ = Command::new("kill")
-        .args(["-9", &pid.to_string()])
-        .status();
+    #[cfg(windows)]
+    {
+        // Avoid taskkill.exe — it is a console app and flashes a terminal.
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{
+            OpenProcess, TerminateProcess, PROCESS_TERMINATE,
+        };
+        unsafe {
+            if let Ok(handle) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+                let _ = TerminateProcess(handle, 1);
+                let _ = CloseHandle(handle);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .status();
+    }
 }
 
 /// Hard-kill on wall_time even if stdout is silent (kill unblocks `read_line`).
