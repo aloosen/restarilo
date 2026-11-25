@@ -128,6 +128,48 @@
   cursor: pointer;
 }
 
+.folder-tree,
+.folder-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.folder-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folder-tree-twist {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+
+.folder-tree li.is-active > .folder-tree-row {
+  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+}
+
+.file-breadcrumb {
+  margin-bottom: 8px;
+  flex: 0 0 auto;
+}
+
+.file-breadcrumb-sep {
+  color: var(--muted);
+}
+
+.explorer-chrome-paths {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 @media (max-width: 900px) {
   .explorer {
     grid-template-columns: 1fr;

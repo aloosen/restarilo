@@ -122,21 +122,25 @@ function App() {
       )}
 
       <section className="explorer">
-        <div className="explorer-tree" aria-hidden="true" />
-        <div className="explorer-listing">
-          {selectedSnapshot ? (
-            <FileBrowser
-              repoName={selectedRepo}
-              snapshotId={selectedSnapshot.id}
-              actionBusy={actionBusy}
-              onActionId={setActionId}
-            />
-          ) : emptyExplorer ? (
-            <p className="app-loading">No snapshots in this repository.</p>
-          ) : (
-            <p className="app-loading">Loading snapshots…</p>
-          )}
-        </div>
+        {selectedSnapshot ? (
+          <FileBrowser
+            repoName={selectedRepo}
+            snapshotId={selectedSnapshot.id}
+            snapshotLabel={
+              selectedSnapshot.short_id || selectedSnapshot.id.slice(0, 8)
+            }
+            actionBusy={actionBusy}
+            onActionId={setActionId}
+          />
+        ) : (
+          <div className="explorer-listing">
+            {emptyExplorer ? (
+              <p className="app-loading">No snapshots in this repository.</p>
+            ) : (
+              <p className="app-loading">Loading snapshots…</p>
+            )}
+          </div>
+        )}
       </section>
     </main>
   );

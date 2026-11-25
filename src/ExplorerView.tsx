@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileActions, type FileSelection } from "./FileActions";
 import { FileListing } from "./FileListing";
+import { FolderTree } from "./FolderTree";
 import {
   clearListDirCacheForRepo,
   loadListDir,
@@ -12,6 +13,7 @@ export type { DirEntry };
 type Props = {
   repoName: string;
   snapshotId: string;
+  snapshotLabel: string;
   actionBusy?: boolean;
   onActionId?: (id: string | null) => void;
 };
@@ -19,6 +21,7 @@ type Props = {
 export function ExplorerView({
   repoName,
   snapshotId,
+  snapshotLabel,
   actionBusy = false,
   onActionId,
 }: Props) {
@@ -96,40 +99,55 @@ export function ExplorerView({
     !loading && loadedPath === path && loadedIdentity === activeIdentity && !loadError;
 
   return (
-    <section className="file-browser">
-      <div className="file-browser-toolbar">
-        <span className="mono file-browser-path">{path}</span>
-        <FileActions
+    <>
+      <div className="explorer-tree">
+        <FolderTree
           repoName={repoName}
           snapshotId={snapshotId}
-          selection={listingReady ? selection : null}
-          disabled={!listingReady || actionBusy}
-          actionBusy={actionBusy}
-          onActionId={onActionId}
-          onError={setActionError}
+          currentPath={path}
+          onNavigate={navigateTo}
         />
       </div>
-      <div className="file-browser-body">
-        {loadError && (
-          <div>
-            <pre className="app-error">{loadError}</pre>
-            <button type="button" onClick={() => navigateTo(path)}>
-              Retry
-            </button>
+      <div className="explorer-listing">
+        <section className="file-browser">
+          <div className="file-browser-toolbar explorer-chrome-paths">
+            <span className="mono">
+              {repoName} · {snapshotLabel} · {path}
+              {selection ? ` · sel ${selection.path}` : ""}
+            </span>
+            <FileActions
+              repoName={repoName}
+              snapshotId={snapshotId}
+              selection={listingReady ? selection : null}
+              disabled={!listingReady || actionBusy}
+              actionBusy={actionBusy}
+              onActionId={onActionId}
+              onError={setActionError}
+            />
           </div>
-        )}
-        {actionError && <pre className="app-error">{actionError}</pre>}
-        {loading && <p className="app-loading">Loading directory…</p>}
-        {listingReady && (
-          <FileListing
-            path={path}
-            entries={entries}
-            selectedPath={selection?.path ?? null}
-            onSelect={selectEntry}
-            onNavigate={navigateTo}
-          />
-        )}
+          <div className="file-browser-body">
+            {loadError && (
+              <div>
+                <pre className="app-error">{loadError}</pre>
+                <button type="button" onClick={() => navigateTo(path)}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {actionError && <pre className="app-error">{actionError}</pre>}
+            {loading && <p className="app-loading">Loading directory…</p>}
+            {listingReady && (
+              <FileListing
+                path={path}
+                entries={entries}
+                selectedPath={selection?.path ?? null}
+                onSelect={selectEntry}
+                onNavigate={navigateTo}
+              />
+            )}
+          </div>
+        </section>
       </div>
-    </section>
+    </>
   );
 }
