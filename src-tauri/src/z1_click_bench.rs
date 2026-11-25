@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-/// Parent path → next target child name on the deep Z1 route (confirmed against live `list_dir`).
+/// Parent path → next target child name on the deep Z1 route.
 pub const Z1_CLICK_SEGMENTS: &[(&str, &str)] = &[
     ("/", "tmp"),
     ("/tmp", "restarilo-z1"),
@@ -24,7 +24,7 @@ pub const Z1_CLICK_SEGMENTS: &[(&str, &str)] = &[
     ("/tmp/restarilo-z1/data/shared/a/b/c", "d"),
 ];
 
-fn z1_cfg() -> Config {
+pub fn z1_cfg() -> Config {
     let fix = Path::new("/tmp/restarilo-z1");
     let user = std::env::var("USER").expect("USER");
     Config {
@@ -56,7 +56,7 @@ fn z1_cfg() -> Config {
     }
 }
 
-fn temp_restic_cache() -> PathBuf {
+pub fn temp_restic_cache() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "restarilo-z1-restic-cache-{}",
         std::process::id()
@@ -67,8 +67,8 @@ fn temp_restic_cache() -> PathBuf {
     dir
 }
 
-fn setup_cache(cfg: Arc<Config>, repo: &str, snap_id: &str) -> (TreeCache, u64) {
-    let cache = TreeCache::new();
+pub fn setup_cache(cfg: Arc<Config>, repo: &str, snap_id: &str) -> (Arc<TreeCache>, u64) {
+    let cache = Arc::new(TreeCache::new());
     let cfg_f = cfg.clone();
     cache.set_fetcher(move |repo_name, tree_id| {
         restic_tree::cat_tree(&cfg_f, repo_name, tree_id)
@@ -84,7 +84,7 @@ fn setup_cache(cfg: Arc<Config>, repo: &str, snap_id: &str) -> (TreeCache, u64) 
     (cache, gen)
 }
 
-fn data_snapshot_id(cfg: &Config, repo: &str) -> String {
+pub fn data_snapshot_id(cfg: &Config, repo: &str) -> String {
     let snaps = restic_cmd::list_snapshots(cfg, repo).expect("snaps");
     snaps
         .into_iter()
@@ -94,7 +94,7 @@ fn data_snapshot_id(cfg: &Config, repo: &str) -> String {
         .expect("no data snapshot")
 }
 
-fn path_check(cfg: &Config, repo: &str, snap: &str) {
+pub fn path_check(cfg: &Config, repo: &str, snap: &str) {
     let (cache, gen) = setup_cache(Arc::new(cfg.clone()), repo, snap);
     for &(parent, child) in Z1_CLICK_SEGMENTS {
         let entries = list_dir(cfg, &cache, gen, repo, snap, parent).expect("list");
