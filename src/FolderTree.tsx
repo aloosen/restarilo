@@ -3,6 +3,7 @@ import {
   ancestorPaths,
   applyFolderDirsResult,
   flattenVisible,
+  mergeBranchFromEvent,
   type BranchState,
 } from "./folderTreeNav";
 import { FolderTreeNode } from "./FolderTreeNode";
@@ -49,11 +50,7 @@ export function FolderTree({
         const dirs = mergeFolderDirs(cur?.dirs ?? [], ev.dirs);
         return {
           ...prev,
-          [ev.parentPath]: applyFolderDirsResult(
-            dirs,
-            ev.childrenComplete,
-            null,
-          ),
+          [ev.parentPath]: mergeBranchFromEvent(cur, dirs, ev.childrenComplete),
         };
       });
     }).then((u) => {

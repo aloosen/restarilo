@@ -45,3 +45,14 @@ export function applyFolderDirsResult(
     childrenComplete,
   };
 }
+
+/** One-level listing complete must stick; progressive scan emits never clear it. */
+export function mergeBranchFromEvent(
+  prev: BranchState | undefined,
+  dirs: DirEntry[],
+  eventChildrenComplete: boolean,
+): BranchState {
+  const childrenComplete =
+    prev?.childrenComplete === true || eventChildrenComplete;
+  return applyFolderDirsResult(dirs, childrenComplete, null);
+}
