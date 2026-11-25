@@ -1,4 +1,4 @@
-use crate::smb_unc::{status_from_raw_os_error, ShareAccessStatus};
+use crate::smb_unc::ShareAccessStatus;
 use std::sync::Mutex;
 
 static SIGNIN_LOCK: Mutex<()> = Mutex::new(());
@@ -24,6 +24,7 @@ pub fn sign_in_share(
 
 #[cfg(windows)]
 fn sign_in_share_inner(share_root: &str, hwnd: isize, prompt_alternate: bool) -> ShareAccessStatus {
+    use crate::smb_unc::status_from_raw_os_error;
     use std::ptr;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_CANCELLED, ERROR_SUCCESS, HWND};

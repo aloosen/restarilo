@@ -4,7 +4,7 @@ use crate::folder_index::FolderChild;
 use crate::folder_index_emit::ScanStatusKind;
 use crate::restic_cmd::SnapshotRow;
 use crate::restic_ls::DirEntry;
-use crate::{restic_cmd, restic_ls};
+use crate::restic_ls;
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;

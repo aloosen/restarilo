@@ -4,7 +4,7 @@ use crate::restic_tree;
 use crate::smb_unc::is_unc_path;
 use serde::Deserialize;
 use std::io::Read;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -149,7 +149,7 @@ impl Drop for JobHandle {
 }
 
 #[cfg(windows)]
-fn assign_job(child: &mut Child) -> Option<JobHandle> {
+fn assign_job(child: &mut std::process::Child) -> Option<JobHandle> {
     use std::os::windows::io::AsRawHandle;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::HANDLE;
