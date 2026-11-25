@@ -34,7 +34,9 @@ pub fn list_repos() -> Result<Vec<RepoName>, String> {
 pub fn restic_version() -> Result<String, String> {
     let cfg = cached_config().ok();
     let bin = restic_bin::resolve_restic(cfg)?;
-    let output = Command::new(&bin)
+    let mut cmd = Command::new(&bin);
+    crate::restic_cmd::hide_console_window(&mut cmd);
+    let output = cmd
         .arg("version")
         .output()
         .map_err(|e| format!("failed to run restic: {e}"))?;

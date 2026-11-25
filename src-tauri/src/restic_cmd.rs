@@ -33,6 +33,7 @@ pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Co
     let exe = exe_dir()?;
     let mode = repo.password_mode(&exe)?;
     let mut cmd = Command::new(&bin);
+    hide_console_window(&mut cmd);
     cmd.env_remove("RESTIC_PASSWORD");
     cmd.env_remove("RESTIC_PASSWORD_FILE");
     cmd.env_remove("RESTIC_PASSWORD_COMMAND");
@@ -54,6 +55,17 @@ pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Co
         cmd.arg(format!("sftp.args={sftp_args}"));
     }
     Ok(cmd)
+}
+
+/// On Windows, restic is a console subsystem binary; without this flag a GUI
+/// host (Tauri) flashes a visible terminal for every spawn.
+pub(crate) fn hide_console_window(_cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        _cmd.creation_flags(CREATE_NO_WINDOW);
+    }
 }
 
 pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String, String> {

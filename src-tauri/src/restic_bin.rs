@@ -64,7 +64,9 @@ fn which_restic() -> Option<PathBuf> {
 
 #[cfg(windows)]
 fn which_restic() -> Option<PathBuf> {
-    let output = Command::new("where").arg("restic").output().ok()?;
+    let mut cmd = Command::new("where");
+    crate::restic_cmd::hide_console_window(&mut cmd);
+    let output = cmd.arg("restic").output().ok()?;
     if !output.status.success() {
         return None;
     }
