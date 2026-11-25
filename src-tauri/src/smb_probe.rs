@@ -82,8 +82,11 @@ fn default_check(path: &str) -> ShareAccessStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Barrier};
+    use std::sync::{Arc, Barrier, Mutex};
     use std::time::Instant;
+
+    /// Probe tests share process-wide WORKER_BUSY; run them one at a time.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn wait_idle() {
         for _ in 0..200 {
@@ -97,6 +100,7 @@ mod tests {
 
     #[test]
     fn blocked_probe_times_out_then_check_in_progress() {
+        let _lock = TEST_LOCK.lock().unwrap();
         wait_idle();
         let epoch = bump_share_epoch();
         let release = Arc::new(Barrier::new(2));
@@ -129,6 +133,7 @@ mod tests {
 
     #[test]
     fn epoch_bump_discards_late_and_local_ok() {
+        let _lock = TEST_LOCK.lock().unwrap();
         wait_idle();
         let epoch1 = bump_share_epoch();
         let release = Arc::new(Barrier::new(2));
