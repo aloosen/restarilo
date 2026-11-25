@@ -90,7 +90,7 @@ pub fn run() {
                 subtree_scan_run::SpawnOpts {
                     wall_time: Duration::from_secs(15),
                     node_budget: subtree_scan::MAX_DIR_NODES,
-                    cancel: None,
+                    cancel: Some(job.cancel.clone()),
                 },
                 move |parent, dirs| {
                     scan_ref.emit_dirs(gen, &repo_c, &snap_c, parent, dirs, false);
