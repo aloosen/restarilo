@@ -46,10 +46,12 @@ impl ScanScheduler {
         g.cancel = Arc::new(AtomicBool::new(false));
     }
 
-    pub fn prioritize(self: &Arc<Self>, root: &str) {
+    pub fn prioritize(self: &Arc<Self>, repo: &str, snapshot_id: &str, root: &str) {
         let root = crate::restic_ls::normalize_dir_path(root);
         let start_now = {
             let mut g = self.inner.lock().unwrap();
+            g.repo = repo.into();
+            g.snapshot_id = snapshot_id.into();
             g.preferred_root = root.clone();
             g.last = None;
             if g.running {

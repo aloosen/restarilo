@@ -69,7 +69,7 @@ fn z1_click_after_folder_dirs_sequence() {
         let cfg2 = cfg.clone();
         let cache2 = cache.clone();
         let t0 = Instant::now();
-        sched.prioritize(parent);
+        sched.prioritize("sftp", &snap, parent);
         let index2 = index.clone();
         let sched2 = sched.clone();
         let snap2 = snap.clone();

@@ -65,9 +65,9 @@ fn prioritize_cancels_and_reruns() {
         }
         ScanStop::Eof
     })));
-    sched.prioritize("/");
+    sched.prioritize("r", "s", "/");
     entered.wait();
-    sched.prioritize("/b");
+    sched.prioritize("r", "s", "/b");
     std::thread::sleep(Duration::from_millis(100));
     assert!(first_saw_cancel.load(Ordering::SeqCst));
     let r = roots.lock().unwrap().clone();
@@ -96,15 +96,15 @@ fn bump_then_prioritize_hands_off_without_success_poison() {
         }
         ScanStop::Eof
     })));
-    sched.prioritize("/");
+    sched.prioritize("r", "s", "/");
     entered.wait();
     sched.on_generation_bump(2);
-    sched.prioritize("/new");
+    sched.prioritize("r", "s", "/new");
     release.wait();
     std::thread::sleep(Duration::from_millis(80));
     assert_eq!(roots.lock().unwrap().iter().filter(|x| *x == "/new").count(), 1);
     // Obsolete Eof for "/" must not leave Success cooldown that blocks a later prefer of "/".
-    sched.prioritize("/");
+    sched.prioritize("r", "s", "/");
     std::thread::sleep(Duration::from_millis(50));
     assert!(roots.lock().unwrap().iter().any(|x| x == "/"));
 }
@@ -122,12 +122,33 @@ fn cooldown_blocks_idle_after_bounds() {
         *runs2.lock().unwrap() += 1;
         ScanStop::NodeBudget
     })));
-    sched.prioritize("/");
+    sched.prioritize("r", "s", "/");
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(*runs.lock().unwrap(), 1);
     sched.maybe_idle_start();
     std::thread::sleep(Duration::from_millis(30));
     assert_eq!(*runs.lock().unwrap(), 1);
+}
+
+#[test]
+fn prioritize_uses_requested_snapshot_not_newest_identity() {
+    let idx = Arc::new(FolderIndex::new());
+    idx.begin(1);
+    let sched = ScanScheduler::new(idx);
+    sched.set_identity("r", "newest");
+    let seen = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let seen2 = seen.clone();
+    sched.set_runner(Some(Arc::new(move |job| {
+        seen2
+            .lock()
+            .unwrap()
+            .push((job.repo.clone(), job.snapshot_id.clone()));
+        ScanStop::Eof
+    })));
+    sched.prioritize("r", "older", "/docs");
+    std::thread::sleep(Duration::from_millis(50));
+    let pairs = seen.lock().unwrap().clone();
+    assert_eq!(pairs, vec![("r".into(), "older".into())]);
 }
 
 #[test]

@@ -42,9 +42,9 @@ pub async fn list_snapshots(
     let roots: HashMap<_, _> = rows.iter().map(|s| (s.id.clone(), s.tree.clone())).collect();
     if cache.remember_snapshots(generation, roots) {
         state.prefetch.enqueue_newest_root(generation, &repo_name, &rows);
-    }
-    if let Some(row) = crate::tree_prefetch::newest_snapshot(&rows) {
-        state.scan.set_identity(&repo_name, &row.id);
+        if let Some(row) = crate::tree_prefetch::newest_snapshot(&rows) {
+            state.scan.set_identity(&repo_name, &row.id);
+        }
     }
     Ok(rows)
 }
@@ -142,7 +142,7 @@ pub async fn list_folder_dirs(
                 return Err("CANCELLED: stale cache generation".into());
             }
             if prioritize {
-                scan.prioritize(&path);
+                scan.prioritize(&repo_name, &snapshot_id, &path);
             }
             let mut complete = index
                 .get(generation, &repo_name, &snapshot_id, &path)

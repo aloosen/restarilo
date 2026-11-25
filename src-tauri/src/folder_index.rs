@@ -37,8 +37,12 @@ impl FolderIndex {
     }
 
     /// Align with `TreeCache::begin_list_snapshots` — same generation counter.
+    /// Ignores a stale bump when `generation` is older than the stored value.
     pub fn begin(&self, generation: u64) {
         let mut g = self.inner.lock().unwrap();
+        if generation < g.generation {
+            return;
+        }
         g.generation = generation;
         g.entries.clear();
     }
@@ -180,6 +184,16 @@ mod tests {
         assert!(!idx.upsert_dirs(1, "r", "s", "/", &[child("b", "/b")], true));
         assert!(idx.get(1, "r", "s", "/").is_none());
         assert!(idx.get(2, "r", "s", "/").is_none());
+    }
+
+    #[test]
+    fn stale_begin_noop_keeps_newer_generation() {
+        let idx = FolderIndex::new();
+        idx.begin(2);
+        idx.upsert_dirs(2, "r", "s", "/", &[child("a", "/a")], true);
+        idx.begin(1);
+        assert_eq!(idx.generation(), 2);
+        assert!(idx.get(2, "r", "s", "/").is_some());
     }
 
     #[test]
