@@ -134,7 +134,7 @@ pub fn restic_repository_id(cfg: &Config, repo_name: &str) -> Result<String, Str
     Ok(parsed.id)
 }
 
-fn record_fetch(tree_id: &str) {
+pub(crate) fn record_fetch(tree_id: &str) {
     FETCH_TOTAL.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut guard) = FETCH_BY_TREE.lock() {
         let map = guard.get_or_insert_with(HashMap::new);
