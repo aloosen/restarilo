@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
-import { SnapshotList, type SnapshotRow } from "./SnapshotList";
+import {
+  SnapshotList,
+  sortSnapshotsNewestFirst,
+  type SnapshotRow,
+} from "./SnapshotList";
 
 type RepoName = { name: string };
 
@@ -16,9 +20,6 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
-  const filesPaneRef = useRef<HTMLElement>(null);
-  const snapshotsPaneRef = useRef<HTMLElement>(null);
-  const returnFocusId = useRef<string | null>(null);
   const actionBusy = actionId !== null;
 
   useEffect(() => {
@@ -34,17 +35,21 @@ function App() {
     if (!selectedRepo) return;
     let discarded = false;
     setSelectedSnapshot(null);
+    setSnapshots([]);
     setLoading(true);
     setError(null);
     invoke<SnapshotRow[]>("list_snapshots", { repoName: selectedRepo })
       .then((rows) => {
-        if (!discarded) setSnapshots(rows);
+        if (discarded) return;
+        const sorted = sortSnapshotsNewestFirst(rows);
+        setSnapshots(sorted);
+        setSelectedSnapshot(sorted[0] ?? null);
       })
       .catch((e: unknown) => {
-        if (!discarded) {
-          setSnapshots([]);
-          setError(String(e));
-        }
+        if (discarded) return;
+        setSnapshots([]);
+        setSelectedSnapshot(null);
+        setError(String(e));
       })
       .finally(() => {
         if (!discarded) setLoading(false);
@@ -53,11 +58,6 @@ function App() {
       discarded = true;
     };
   }, [selectedRepo]);
-
-  useEffect(() => {
-    if (!selectedSnapshot) return;
-    filesPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [selectedSnapshot]);
 
   const onCancel = useCallback(() => {
     if (!actionId) return;
@@ -76,42 +76,41 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [actionBusy, onCancel]);
 
-  function selectSnapshot(row: SnapshotRow) {
-    returnFocusId.current = row.id;
+  function onSelectSnapshotId(id: string) {
+    const row = snapshots.find((s) => s.id === id) ?? null;
     setSelectedSnapshot(row);
   }
 
-  function backToSnapshots() {
-    const id = returnFocusId.current ?? selectedSnapshot?.id ?? null;
-    setSelectedSnapshot(null);
-    requestAnimationFrame(() => {
-      const root = snapshotsPaneRef.current;
-      if (!root || !id) return;
-      const btn = root.querySelector<HTMLButtonElement>(
-        `button[data-snapshot-id="${CSS.escape(id)}"]`,
-      );
-      btn?.focus();
-    });
-  }
+  const emptyExplorer = !loading && snapshots.length === 0;
 
   return (
-    <main className={`app${selectedSnapshot ? " has-files" : ""}`}>
+    <main className="app">
       <h1>restarilo</h1>
 
-      <label className="app-repo">
-        Repo{" "}
-        <select
-          value={selectedRepo}
-          onChange={(e) => setSelectedRepo(e.target.value)}
-          disabled={repos.length === 0 || actionBusy}
-        >
-          {repos.map((r) => (
-            <option key={r.name} value={r.name}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="explorer-chrome">
+        <label className="app-repo">
+          Repo{" "}
+          <select
+            value={selectedRepo}
+            onChange={(e) => setSelectedRepo(e.target.value)}
+            disabled={repos.length === 0 || actionBusy}
+          >
+            {repos.map((r) => (
+              <option key={r.name} value={r.name}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <SnapshotList
+          snapshots={snapshots}
+          selectedId={selectedSnapshot?.id ?? null}
+          loading={loading}
+          disabled={actionBusy}
+          error={error}
+          onSelectId={onSelectSnapshotId}
+        />
+      </div>
 
       {actionBusy && (
         <div className="app-action-bar">
@@ -122,47 +121,23 @@ function App() {
         </div>
       )}
 
-      <div className="app-panes">
-        <section className="app-pane app-pane-snapshots" ref={snapshotsPaneRef}>
-          <h2>Snapshots</h2>
-          <div className="app-pane-body">
-            <SnapshotList
-              snapshots={snapshots}
-              selectedId={selectedSnapshot?.id ?? null}
-              loading={loading}
-              error={error}
-              onSelectSnapshot={selectSnapshot}
+      <section className="explorer">
+        <div className="explorer-tree" aria-hidden="true" />
+        <div className="explorer-listing">
+          {selectedSnapshot ? (
+            <FileBrowser
+              repoName={selectedRepo}
+              snapshotId={selectedSnapshot.id}
+              actionBusy={actionBusy}
+              onActionId={setActionId}
             />
-          </div>
-        </section>
-        <section className="app-pane app-pane-files" ref={filesPaneRef}>
-          <div className="app-pane-files-head">
-            <h2>Files</h2>
-            {selectedSnapshot && (
-              <button
-                type="button"
-                className="linkish app-back-snapshots"
-                onClick={backToSnapshots}
-              >
-                Snapshots
-              </button>
-            )}
-          </div>
-          <div className="app-pane-body app-pane-body-files">
-            {selectedSnapshot ? (
-              <FileBrowser
-                key={`${selectedRepo}:${selectedSnapshot.id}`}
-                repoName={selectedRepo}
-                snapshotId={selectedSnapshot.id}
-                actionBusy={actionBusy}
-                onActionId={setActionId}
-              />
-            ) : (
-              <p className="app-loading">Select a snapshot to browse files.</p>
-            )}
-          </div>
-        </section>
-      </div>
+          ) : emptyExplorer ? (
+            <p className="app-loading">No snapshots in this repository.</p>
+          ) : (
+            <p className="app-loading">Loading snapshots…</p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

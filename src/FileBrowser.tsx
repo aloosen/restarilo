@@ -32,6 +32,7 @@ export function FileBrowser({
   actionBusy = false,
   onActionId,
 }: Props) {
+  const activeIdentity = `${repoName}\0${snapshotId}`;
   const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [selection, setSelection] = useState<FileSelection | null>(null);
@@ -39,43 +40,49 @@ export function FileBrowser({
   const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadedPath, setLoadedPath] = useState<string | null>(null);
+  const [loadedIdentity, setLoadedIdentity] = useState<string | null>(null);
   const upRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const pendingFocusPath = useRef<string | null>("/");
 
-  useEffect(() => {
-    setPath("/");
+  function resetListing() {
     setEntries([]);
     setSelection(null);
     setLoadError(null);
     setActionError(null);
     setLoading(true);
     setLoadedPath(null);
+    setLoadedIdentity(null);
+  }
+
+  useEffect(() => {
+    setPath("/");
+    resetListing();
     pendingFocusPath.current = "/";
   }, [repoName, snapshotId]);
 
   useEffect(() => {
     let discarded = false;
-    setLoading(true);
-    setLoadedPath(null);
-    setLoadError(null);
-    setActionError(null);
-    setEntries([]);
-    setSelection(null);
+    resetListing();
     const requestedPath = path;
-    invoke<DirEntry[]>("list_dir", { repoName, snapshotId, path: requestedPath })
+    const requestedIdentity = activeIdentity;
+    invoke<DirEntry[]>("list_dir", {
+      repoName,
+      snapshotId,
+      path: requestedPath,
+    })
       .then((rows) => {
-        if (!discarded) {
-          setEntries(rows);
-          setLoadedPath(requestedPath);
-        }
+        if (discarded) return;
+        setEntries(rows);
+        setLoadedPath(requestedPath);
+        setLoadedIdentity(requestedIdentity);
       })
       .catch((e: unknown) => {
-        if (!discarded) {
-          setEntries([]);
-          setLoadError(String(e));
-          setLoadedPath(requestedPath);
-        }
+        if (discarded) return;
+        setEntries([]);
+        setLoadError(String(e));
+        setLoadedPath(requestedPath);
+        setLoadedIdentity(requestedIdentity);
       })
       .finally(() => {
         if (!discarded) setLoading(false);
@@ -83,7 +90,7 @@ export function FileBrowser({
     return () => {
       discarded = true;
     };
-  }, [repoName, snapshotId, path]);
+  }, [repoName, snapshotId, path, activeIdentity]);
 
   useEffect(() => {
     if (loading || loadedPath !== path || pendingFocusPath.current !== path) return;
@@ -101,6 +108,7 @@ export function FileBrowser({
     pendingFocusPath.current = next;
     setLoading(true);
     setLoadedPath(null);
+    setLoadedIdentity(null);
     setPath(next);
   }
 
@@ -108,15 +116,8 @@ export function FileBrowser({
     setSelection({ path: entry.path, name: entry.name, is_dir: entry.is_dir });
   }
 
-  function onEntryKeyDown(e: KeyboardEvent, entry: DirEntry) {
-    if (e.key === " " && entry.is_dir) {
-      e.preventDefault();
-      selectEntry(entry);
-    }
-  }
-
-  const atRoot = path === "/";
-  const showList = !loading && !loadError;
+  const listingReady =
+    !loading && loadedPath === path && loadedIdentity === activeIdentity && !loadError;
 
   return (
     <section className="file-browser">
@@ -124,7 +125,7 @@ export function FileBrowser({
         <button
           ref={upRef}
           type="button"
-          disabled={atRoot || loading}
+          disabled={path === "/" || loading}
           onClick={() => navigateTo(parentPath(path))}
         >
           Up
@@ -133,8 +134,8 @@ export function FileBrowser({
         <FileActions
           repoName={repoName}
           snapshotId={snapshotId}
-          selection={selection}
-          disabled={loading || actionBusy}
+          selection={listingReady ? selection : null}
+          disabled={!listingReady || actionBusy}
           actionBusy={actionBusy}
           onActionId={onActionId}
           onError={setActionError}
@@ -144,7 +145,7 @@ export function FileBrowser({
         {loadError && <pre className="app-error">{loadError}</pre>}
         {actionError && <pre className="app-error">{actionError}</pre>}
         {loading && <p className="app-loading">Loading directory…</p>}
-        {showList && (
+        {listingReady && (
           <table className="app-table">
             <thead>
               <tr>
@@ -153,31 +154,40 @@ export function FileBrowser({
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
-                <tr
-                  key={e.path}
-                  className={selection?.path === e.path ? "is-selectable is-selected" : "is-selectable"}
-                  onClick={() => selectEntry(e)}
-                  onDoubleClick={() => e.is_dir && navigateTo(e.path)}
-                >
-                  <td className="mono">
-                    <button
-                      type="button"
-                      className="linkish"
-                      aria-current={selection?.path === e.path ? "true" : undefined}
-                      onClick={(event) => {
-                        if (!e.is_dir) return;
-                        event.stopPropagation();
-                        navigateTo(e.path);
-                      }}
-                      onKeyDown={(ev) => onEntryKeyDown(ev, e)}
-                    >
-                      {e.name}
-                    </button>
-                  </td>
-                  <td>{e.is_dir ? "dir" : "file"}</td>
-                </tr>
-              ))}
+              {entries.map((e) => {
+                const selected = selection?.path === e.path;
+                return (
+                  <tr
+                    key={e.path}
+                    className={
+                      selected ? "is-selectable is-selected" : "is-selectable"
+                    }
+                    onClick={() => selectEntry(e)}
+                    onDoubleClick={() => e.is_dir && navigateTo(e.path)}
+                  >
+                    <td className="mono">
+                      <button
+                        type="button"
+                        className="linkish"
+                        aria-current={selected ? "true" : undefined}
+                        onClick={(event) => {
+                          if (!e.is_dir) return;
+                          event.stopPropagation();
+                          navigateTo(e.path);
+                        }}
+                        onKeyDown={(ev: KeyboardEvent) => {
+                          if (ev.key !== " ") return;
+                          ev.preventDefault();
+                          selectEntry(e);
+                        }}
+                      >
+                        {e.name}
+                      </button>
+                    </td>
+                    <td>{e.is_dir ? "dir" : "file"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

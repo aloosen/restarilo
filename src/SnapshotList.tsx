@@ -11,57 +11,61 @@ type Props = {
   snapshots: SnapshotRow[];
   selectedId: string | null;
   loading: boolean;
+  disabled?: boolean;
   error: string | null;
-  onSelectSnapshot: (row: SnapshotRow) => void;
+  onSelectId: (id: string) => void;
 };
+
+function instantMs(time: string): number {
+  const n = Date.parse(time);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function sortSnapshotsNewestFirst(rows: SnapshotRow[]): SnapshotRow[] {
+  return [...rows].sort((a, b) => {
+    const diff = instantMs(b.time) - instantMs(a.time);
+    if (diff !== 0) return diff;
+    if (a.id < b.id) return -1;
+    if (a.id > b.id) return 1;
+    return 0;
+  });
+}
+
+function optionLabel(s: SnapshotRow): string {
+  const short = s.short_id || s.id.slice(0, 8);
+  return `${s.time} · ${s.hostname} · ${short}`;
+}
 
 export function SnapshotList({
   snapshots,
   selectedId,
   loading,
+  disabled,
   error,
-  onSelectSnapshot,
+  onSelectId,
 }: Props) {
-  if (error) return <pre className="app-error">{error}</pre>;
-  if (loading) return <p className="app-loading">Loading snapshots…</p>;
+  const sorted = sortSnapshotsNewestFirst(snapshots);
+  const empty = sorted.length === 0;
 
   return (
-    <table className="app-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Time</th>
-          <th>Host</th>
-          <th>Paths</th>
-        </tr>
-      </thead>
-      <tbody>
-        {snapshots.map((s) => {
-          const label = s.short_id || s.id.slice(0, 8);
-          const selected = selectedId === s.id;
-          return (
-            <tr
-              key={s.id}
-              className={selected ? "is-selectable is-selected" : "is-selectable"}
-              onClick={() => onSelectSnapshot(s)}
-            >
-              <td className="mono">
-                <button
-                  type="button"
-                  className="linkish"
-                  data-snapshot-id={s.id}
-                  aria-current={selected ? "true" : undefined}
-                >
-                  {label}
-                </button>
-              </td>
-              <td>{s.time}</td>
-              <td>{s.hostname}</td>
-              <td>{s.paths.join(", ")}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="app-snapshot">
+      <label>
+        Snapshot{" "}
+        <select
+          value={selectedId ?? ""}
+          disabled={disabled || loading || empty}
+          onChange={(e) => onSelectId(e.target.value)}
+        >
+          {empty && <option value="">No snapshots</option>}
+          {sorted.map((s) => (
+            <option key={s.id} value={s.id}>
+              {optionLabel(s)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {loading && <span className="app-loading">Loading snapshots…</span>}
+      {error && <pre className="app-error">{error}</pre>}
+    </div>
   );
 }

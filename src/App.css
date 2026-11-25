@@ -1,3 +1,5 @@
+@import "./Explorer.css";
+
 :root {
   color-scheme: light dark;
   --bg: #f4f4f5;
@@ -56,15 +58,6 @@ body,
   color: var(--muted);
 }
 
-.app-repo select {
-  margin-left: 4px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
-}
-
 .app-error {
   color: var(--error);
   white-space: pre-wrap;
@@ -72,73 +65,6 @@ body,
 
 .app-loading {
   color: var(--muted);
-}
-
-.app-panes {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
-}
-
-.app-pane {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.app-pane h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.app-pane-files-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex: 0 0 auto;
-}
-
-.app-pane-snapshots > h2 {
-  margin-bottom: 8px;
-  flex: 0 0 auto;
-}
-
-.app-pane-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.app-pane-body-files {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.file-browser {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  flex: 1;
-}
-
-.file-browser-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.app-back-snapshots {
-  display: none;
 }
 
 .app-table {
@@ -203,86 +129,4 @@ button.linkish {
 button.linkish:focus-visible {
   outline: 2px solid var(--fg);
   outline-offset: 2px;
-}
-
-.file-browser-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-  min-width: 0;
-  flex: 0 0 auto;
-}
-
-.file-browser-toolbar button,
-.file-actions button {
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.file-browser-toolbar button:disabled,
-.file-actions button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.file-browser-path {
-  color: var(--muted);
-  font-size: 13px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  flex: 1 1 auto;
-}
-
-.file-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-.file-actions-busy {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.app-action-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.app-action-bar button {
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-@media (max-width: 900px) {
-  .app-panes {
-    grid-template-columns: 1fr;
-  }
-
-  .app.has-files .app-pane-snapshots {
-    display: none;
-  }
-
-  .app:not(.has-files) .app-pane-files {
-    display: none;
-  }
-
-  .app-back-snapshots {
-    display: inline;
-  }
 }

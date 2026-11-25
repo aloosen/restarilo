@@ -4,7 +4,7 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
-Select a snapshot to browse its file tree (folders and files from restic tree objects via `cat blob`, keyed by tree id and reused across snapshots that share subtrees). From the file browser you can restore or dump a selection, or open a file.
+Browse snapshots in an Explorer-style layout: repository and snapshot selectors stay above the browser, with a folder-tree region on the left and the current folder listing on the right. When a repository loads, the newest snapshot is selected automatically (by normalized snapshot time). From the listing you can restore or dump a selection, or open a file.
 
 After the snapshot list loads, the newest snapshot’s root tree is prefetched; after you open a directory, up to four child folders are queued (one background fetch). An optional on-disk cache (see `cache_dir`) keeps listings across restarts. The in-memory session cache is capped at about 32 MiB (LRU).
 
