@@ -67,15 +67,20 @@ export function FolderTree({
       const gen = (branchGen.current[branchPath] ?? 0) + 1;
       branchGen.current[branchPath] = gen;
       const startedIdentity = identityRef.current;
-      setBranches((prev) => ({
-        ...prev,
-        [branchPath]: {
-          loading: true,
-          error: null,
-          dirs: prev[branchPath]?.dirs ?? [],
-          childrenComplete: prev[branchPath]?.childrenComplete ?? false,
-        },
-      }));
+      setBranches((prev) => {
+        const cur = prev[branchPath];
+        const dirs = cur?.dirs ?? [];
+        // Keep existing children visible; only spin when this branch is still empty.
+        return {
+          ...prev,
+          [branchPath]: {
+            loading: dirs.length === 0,
+            error: null,
+            dirs,
+            childrenComplete: cur?.childrenComplete ?? false,
+          },
+        };
+      });
       loadFolderDirs(repoName, snapshotId, branchPath, prioritize)
         .then((res) => {
           if (identityRef.current !== startedIdentity) return;

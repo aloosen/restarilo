@@ -55,7 +55,7 @@ export function FolderTreeNode(p: Props) {
           <span>{label}</span>
         </button>
       </div>
-      {open && branch?.loading && (
+      {open && branch?.loading && (branch.dirs.length === 0) && (
         <p className="app-loading" style={{ paddingLeft: (p.depth + 1) * 12 }}>
           Loading…
         </p>
