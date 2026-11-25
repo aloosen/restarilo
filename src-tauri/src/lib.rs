@@ -28,6 +28,7 @@ use app_state::AppState;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -93,6 +94,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let scan = app.state::<AppState>().scan.clone();
+            scan.set_webview_emit(Some(Arc::new(move |ev| {
+                let _ = handle.emit("folder-index-updated", &ev);
+            })));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::restic_version,
             commands::list_repos,

@@ -68,7 +68,7 @@ export function FolderTreeNode(p: Props) {
           </button>
         </div>
       )}
-      {open && branch && !branch.loading && !branch.error && (
+      {open && branch && branch.dirs.length > 0 && (
         <ul role="group">
           {branch.dirs.map((d) => (
             <FolderTreeNode

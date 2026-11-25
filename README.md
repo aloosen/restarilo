@@ -8,6 +8,14 @@ Browse snapshots in an Explorer-style layout with a brand header (archive mark +
 
 After the snapshot list loads, the newest snapshot’s root tree is prefetched; after you open a directory, up to four child folders are queued (one background fetch). An optional on-disk cache (see `cache_dir`) keeps listings across restarts. The in-memory session cache is capped at about 32 MiB (LRU).
 
+First-time folder navigation (especially over SFTP) uses a separate folder index from the file listing: expanding a twist or navigating a folder name loads child **directories** via `list_folder_dirs` (with scan priority only on that explicit action), while the right-hand file pane still uses `list_dir`. Known child folders render as soon as they appear (including from a bounded background `restic ls … --recursive` scan started after idle); the tree does not wait for the full file listing. Completeness of a branch comes from a finished one-level listing; scan status is separate so a bounded scan cannot leave the twist spinner stuck after the one-level fallback. Click-sequence timing benches use a dedicated temp `RESTIC_CACHE_DIR` (never wipe `~/.cache/restic`):
+
+```bash
+RESTARILO_Z1_BENCH=1 cargo test --lib z1_click -- --ignored --nocapture --test-threads=1
+```
+
+(cwd `src-tauri`).
+
 ## Configuration
 
 Search order for `config.toml`:

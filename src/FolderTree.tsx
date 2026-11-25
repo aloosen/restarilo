@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ancestorPaths, flattenVisible, type BranchState } from "./folderTreeNav";
+import {
+  ancestorPaths,
+  applyFolderDirsResult,
+  flattenVisible,
+  type BranchState,
+} from "./folderTreeNav";
 import { FolderTreeNode } from "./FolderTreeNode";
-import { loadListDir } from "./listDirCache";
+import {
+  loadFolderDirs,
+  mergeFolderDirs,
+  subscribeFolderIndex,
+} from "./folderIndex";
 
 type Props = {
   repoName: string;
@@ -30,8 +39,34 @@ export function FolderTree({
     branchGen.current = {};
   }, [repoName, snapshotId]);
 
+  useEffect(() => {
+    let alive = true;
+    let unlisten: (() => void) | undefined;
+    void subscribeFolderIndex(repoName, snapshotId, (ev) => {
+      if (!alive || identityRef.current !== `${repoName}\0${snapshotId}`) return;
+      setBranches((prev) => {
+        const cur = prev[ev.parentPath];
+        const dirs = mergeFolderDirs(cur?.dirs ?? [], ev.dirs);
+        return {
+          ...prev,
+          [ev.parentPath]: applyFolderDirsResult(
+            dirs,
+            ev.childrenComplete,
+            null,
+          ),
+        };
+      });
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
+  }, [repoName, snapshotId]);
+
   const loadBranch = useCallback(
-    (branchPath: string) => {
+    (branchPath: string, prioritize: boolean) => {
       const gen = (branchGen.current[branchPath] ?? 0) + 1;
       branchGen.current[branchPath] = gen;
       const startedIdentity = identityRef.current;
@@ -41,18 +76,20 @@ export function FolderTree({
           loading: true,
           error: null,
           dirs: prev[branchPath]?.dirs ?? [],
+          childrenComplete: prev[branchPath]?.childrenComplete ?? false,
         },
       }));
-      loadListDir(repoName, snapshotId, branchPath)
-        .then((rows) => {
+      loadFolderDirs(repoName, snapshotId, branchPath, prioritize)
+        .then((res) => {
           if (identityRef.current !== startedIdentity) return;
           if (branchGen.current[branchPath] !== gen) return;
-          const dirs = rows
-            .filter((e) => e.is_dir)
-            .sort((a, b) => a.name.localeCompare(b.name));
           setBranches((prev) => ({
             ...prev,
-            [branchPath]: { loading: false, error: null, dirs },
+            [branchPath]: applyFolderDirsResult(
+              mergeFolderDirs(prev[branchPath]?.dirs ?? [], res.dirs),
+              res.children_complete,
+              null,
+            ),
           }));
         })
         .catch((e: unknown) => {
@@ -64,6 +101,7 @@ export function FolderTree({
               loading: false,
               error: String(e),
               dirs: prev[branchPath]?.dirs ?? [],
+              childrenComplete: prev[branchPath]?.childrenComplete ?? false,
             },
           }));
         });
@@ -72,7 +110,7 @@ export function FolderTree({
   );
 
   useEffect(() => {
-    loadBranch("/");
+    loadBranch("/", false);
   }, [loadBranch, repoName, snapshotId]);
 
   useEffect(() => {
@@ -82,7 +120,7 @@ export function FolderTree({
       for (const p of parts) next.add(p);
       return next;
     });
-    for (const p of parts) loadBranch(p);
+    for (const p of parts) loadBranch(p, false);
   }, [currentPath, loadBranch]);
 
   function toggle(path: string) {
@@ -91,10 +129,15 @@ export function FolderTree({
       if (next.has(path)) next.delete(path);
       else {
         next.add(path);
-        loadBranch(path);
+        loadBranch(path, true);
       }
       return next;
     });
+  }
+
+  function navigate(path: string) {
+    loadBranch(path, true);
+    onNavigate(path);
   }
 
   function focusPath(path: string) {
@@ -108,7 +151,7 @@ export function FolderTree({
   function onKey(e: KeyboardEvent, path: string) {
     if (e.key === "Enter") {
       e.preventDefault();
-      onNavigate(path);
+      navigate(path);
       return;
     }
     if (e.key === "ArrowRight") {
@@ -151,8 +194,8 @@ export function FolderTree({
         expanded={expanded}
         branches={branches}
         onToggle={toggle}
-        onNavigate={onNavigate}
-        onRetry={loadBranch}
+        onNavigate={navigate}
+        onRetry={(p) => loadBranch(p, true)}
         onKey={onKey}
       />
     </ul>

@@ -4,6 +4,7 @@ export type BranchState = {
   loading: boolean;
   error: string | null;
   dirs: DirEntry[];
+  childrenComplete: boolean;
 };
 
 export function flattenVisible(
@@ -14,7 +15,7 @@ export function flattenVisible(
   const out = [path];
   if (!expanded.has(path)) return out;
   const branch = branches[path];
-  if (!branch || branch.loading || branch.error) return out;
+  if (!branch) return out;
   for (const d of branch.dirs) {
     out.push(...flattenVisible(d.path, expanded, branches));
   }
@@ -30,4 +31,17 @@ export function ancestorPaths(path: string): string[] {
     out.push(acc);
   }
   return out;
+}
+
+export function applyFolderDirsResult(
+  dirs: DirEntry[],
+  childrenComplete: boolean,
+  error: string | null,
+): BranchState {
+  return {
+    loading: error ? false : !childrenComplete,
+    error,
+    dirs,
+    childrenComplete,
+  };
 }
