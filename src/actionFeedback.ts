@@ -18,20 +18,6 @@ export function targetFromExistsError(message: string): string | null {
   return message.slice(prefix.length);
 }
 
-export function overwriteAskBody(opts: {
-  sourcePath: string;
-  snapshotLabel: string;
-  targetPath: string;
-}): string {
-  return [
-    "Target already exists. Overwrite?",
-    "",
-    `Source: ${opts.sourcePath}`,
-    `Snapshot: ${opts.snapshotLabel}`,
-    `Destination: ${opts.targetPath}`,
-  ].join("\n");
-}
-
 export function joinTarget(targetDir: string, name: string, zip: boolean): string {
   const sep = targetDir.includes("\\") && !targetDir.includes("/") ? "\\" : "/";
   const base = targetDir.endsWith("/") || targetDir.endsWith("\\")

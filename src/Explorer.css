@@ -109,8 +109,7 @@
   border-top: 1px solid var(--border); background: var(--side);
   color: var(--muted); font-size: 12px;
 }
-.file-actions button,
-.app-action-bar button {
+.file-actions button {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--fg); background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 7px 10px; cursor: pointer;
@@ -121,11 +120,38 @@
 .file-actions button:disabled { opacity: 0.52; cursor: default; }
 .file-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .action-icon { color: inherit; }
-.file-actions-busy { color: var(--muted); font-size: 13px; }
 .app-success { color: var(--accent); white-space: pre-wrap; }
-.app-action-bar {
-  display: flex; align-items: center; gap: 8px; padding: 8px 22px;
-  border-bottom: 1px solid var(--border); background: var(--side);
+.busy-dimmer {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, #18232a 42%, transparent);
+  padding: 24px;
+}
+.busy-modal {
+  width: min(360px, 100%); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 14px; padding: 22px;
+  box-shadow: 0 12px 40px color-mix(in srgb, #18232a 28%, transparent);
+  text-align: center;
+}
+.busy-modal-label { margin: 0 0 16px; font-size: 17px; font-weight: 650; }
+.busy-modal-cancel {
+  color: var(--accent-ink); background: var(--accent); border: 0;
+  border-radius: 8px; padding: 8px 16px; cursor: pointer; font: inherit; font-weight: 600;
+}
+.busy-modal-hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.overwrite-modal { text-align: left; }
+.overwrite-modal-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.overwrite-modal-dl {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 18px;
+}
+.overwrite-modal-dl dt { color: var(--muted); font-size: 12px; }
+.overwrite-modal-dl dd { margin: 0; overflow-wrap: anywhere; }
+.overwrite-modal-actions {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+}
+.overwrite-modal-secondary {
+  color: var(--fg); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit;
 }
 .folder-tree,
 .folder-tree ul { list-style: none; margin: 0; padding: 0; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { BusyModal } from "./BusyModal";
 import { FileBrowser } from "./FileBrowser";
 import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
@@ -171,10 +172,7 @@ function App() {
         </div>
       </header>
       {actionBusy && (
-        <div className="app-action-bar">
-          <span className="file-actions-busy">{busyLabel ?? "Working…"}</span>
-          <button type="button" onClick={onCancel}>Cancel</button>
-        </div>
+        <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />
       )}
 
       <section className="explorer">

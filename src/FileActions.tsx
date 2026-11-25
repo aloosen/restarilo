@@ -1,14 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   busyLabelFor,
   joinTarget,
-  overwriteAskBody,
   successMessage,
   targetFromExistsError,
   type ActionKind,
 } from "./actionFeedback";
 import { icons, TablerSvg } from "./tablerIcons";
+import { useOverwriteAsk } from "./useOverwriteAsk";
 
 export type FileSelection = {
   path: string;
@@ -37,6 +37,7 @@ async function pickFolder(): Promise<string | null> {
 export function FileActions(p: Props) {
   const { selection } = p;
   const block = p.disabled || !!p.actionBusy;
+  const { askOverwrite, modal } = useOverwriteAsk();
 
   async function begin(kind: ActionKind): Promise<string> {
     p.onSuccess?.(null);
@@ -107,15 +108,11 @@ export function FileActions(p: Props) {
         end();
         if (msg.includes("CANCELLED:")) return;
         if (msg.includes("TARGET_EXISTS:") && !overwrite) {
-          const target = targetFromExistsError(msg) ?? expected;
-          const ok = await ask(
-            overwriteAskBody({
-              sourcePath: selection!.path,
-              snapshotLabel: p.snapshotLabel,
-              targetPath: target,
-            }),
-            { title: "Overwrite?", kind: "warning" },
-          );
+          const ok = await askOverwrite({
+            sourcePath: selection!.path,
+            snapshotLabel: p.snapshotLabel,
+            targetPath: targetFromExistsError(msg) ?? expected,
+          });
           if (!ok) return;
           await attempt(true);
           return;
@@ -160,32 +157,35 @@ export function FileActions(p: Props) {
   }
 
   return (
-    <div className="file-actions">
-      <button
-        type="button"
-        className="file-actions-primary"
-        disabled={block || !selection}
-        onClick={() => void runRestoreOrDump("restore_path")}
-      >
-        <TablerSvg svg={icons.restore} className="action-icon" />
-        Restore
-      </button>
-      <button
-        type="button"
-        disabled={block || !selection}
-        onClick={() => void runRestoreOrDump("dump_path")}
-      >
-        <TablerSvg svg={icons.export} className="action-icon" />
-        Export
-      </button>
-      <button
-        type="button"
-        disabled={block || !selection || !!selection?.is_dir}
-        onClick={() => void onOpen()}
-      >
-        <TablerSvg svg={icons.open} className="action-icon" />
-        Open
-      </button>
-    </div>
+    <>
+      <div className="file-actions">
+        <button
+          type="button"
+          className="file-actions-primary"
+          disabled={block || !selection}
+          onClick={() => void runRestoreOrDump("restore_path")}
+        >
+          <TablerSvg svg={icons.restore} className="action-icon" />
+          Restore
+        </button>
+        <button
+          type="button"
+          disabled={block || !selection}
+          onClick={() => void runRestoreOrDump("dump_path")}
+        >
+          <TablerSvg svg={icons.export} className="action-icon" />
+          Export
+        </button>
+        <button
+          type="button"
+          disabled={block || !selection || !!selection?.is_dir}
+          onClick={() => void onOpen()}
+        >
+          <TablerSvg svg={icons.open} className="action-icon" />
+          Open
+        </button>
+      </div>
+      {modal}
+    </>
   );
 }
