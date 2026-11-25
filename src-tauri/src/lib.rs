@@ -2,6 +2,7 @@ mod config;
 mod restic_actions;
 mod restic_bin;
 mod restic_cmd;
+mod restic_killable;
 mod restic_ls;
 mod ssh;
 
@@ -79,6 +80,16 @@ fn restic_version() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn begin_action(action_id: String) -> Result<(), String> {
+    restic_killable::begin_action(action_id)
+}
+
+#[tauri::command]
+fn cancel_action(action_id: String) -> Result<(), String> {
+    restic_killable::cancel_action(action_id)
+}
+
+#[tauri::command]
 async fn restore_path(
     repo_name: String,
     snapshot_id: String,
@@ -86,6 +97,7 @@ async fn restore_path(
     name: String,
     target_dir: String,
     overwrite: bool,
+    action_id: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let cfg = cached_config()?;
@@ -97,6 +109,7 @@ async fn restore_path(
             &name,
             &target_dir,
             overwrite,
+            action_id,
         )
     })
     .await
@@ -112,6 +125,7 @@ async fn dump_path(
     is_dir: bool,
     target_dir: String,
     overwrite: bool,
+    action_id: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let cfg = cached_config()?;
@@ -124,6 +138,7 @@ async fn dump_path(
             is_dir,
             &target_dir,
             overwrite,
+            action_id,
         )
     })
     .await
@@ -137,10 +152,19 @@ async fn open_path(
     path: String,
     name: String,
     is_dir: bool,
+    action_id: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let cfg = cached_config()?;
-        restic_actions::open_path(cfg, &repo_name, &snapshot_id, &path, &name, is_dir)
+        restic_actions::open_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            is_dir,
+            action_id,
+        )
     })
     .await
     .map_err(|e| format!("open_path task failed: {e}"))?
@@ -155,6 +179,8 @@ pub fn run() {
             list_repos,
             list_snapshots,
             list_dir,
+            begin_action,
+            cancel_action,
             restore_path,
             dump_path,
             open_path
