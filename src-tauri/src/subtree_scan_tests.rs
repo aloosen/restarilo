@@ -1,5 +1,5 @@
 use super::*;
-use crate::subtree_scan_run::spawn_silent_deadline_test;
+use crate::subtree_scan_run::{spawn_quick_eof_test, spawn_silent_deadline_test};
 use std::io::Cursor;
 use std::time::{Duration, Instant};
 
@@ -65,4 +65,17 @@ fn silent_stdout_hard_kill_short_deadline() {
     let stop = spawn_silent_deadline_test(Duration::from_millis(150));
     assert_eq!(stop, ScanStop::WallTime);
     assert!(t0.elapsed() < Duration::from_secs(3));
+}
+
+#[test]
+fn early_eof_returns_well_under_wall_budget() {
+    let wall = Duration::from_secs(2);
+    let t0 = Instant::now();
+    let stop = spawn_quick_eof_test(wall);
+    assert_eq!(stop, ScanStop::Eof);
+    assert!(
+        t0.elapsed() < wall / 2,
+        "watchdog must disarm on EOF; elapsed {:?}",
+        t0.elapsed()
+    );
 }

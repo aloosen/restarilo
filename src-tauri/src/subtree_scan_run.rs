@@ -63,15 +63,23 @@ pub fn run_scan_command(
     let deadline = Instant::now() + opts.wall_time;
     let cancel = opts.cancel.clone();
     let timed_out = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
     let timed_flag = timed_out.clone();
     let cancel_w = cancel.clone();
+    let done_w = done.clone();
     let watchdog = std::thread::spawn(move || {
         while Instant::now() < deadline {
+            if done_w.load(Ordering::Relaxed) {
+                return;
+            }
             if cancel_w.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
                 kill_pid(pid);
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
+        }
+        if done_w.load(Ordering::Relaxed) {
+            return;
         }
         timed_flag.store(true, Ordering::Relaxed);
         kill_pid(pid);
@@ -80,6 +88,7 @@ pub fn run_scan_command(
     let stdout = match child.stdout.take() {
         Some(s) => s,
         None => {
+            done.store(true, Ordering::Relaxed);
             kill_pid(pid);
             let _ = child.wait();
             let _ = watchdog.join();
@@ -127,6 +136,7 @@ pub fn run_scan_command(
     } else if cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
         stop = ScanStop::Cancelled;
     }
+    done.store(true, Ordering::Relaxed);
     let _ = child.kill();
     let _ = child.wait();
     let _ = watchdog.join();
@@ -141,6 +151,31 @@ pub fn spawn_silent_deadline_test(wall: Duration) -> ScanStop {
         .stderr(Stdio::null())
         .stdin(Stdio::null());
     let child = cmd.spawn().expect("spawn sleep");
+    let index = FolderIndex::new();
+    index.begin(1);
+    run_scan_command(
+        child,
+        "/",
+        1,
+        "r",
+        "s",
+        &index,
+        SpawnOpts {
+            wall_time: wall,
+            node_budget: MAX_DIR_NODES,
+            cancel: None,
+        },
+        |_, _| {},
+    )
+}
+
+#[cfg(test)]
+pub fn spawn_quick_eof_test(wall: Duration) -> ScanStop {
+    let mut cmd = Command::new("true");
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null());
+    let child = cmd.spawn().expect("spawn true");
     let index = FolderIndex::new();
     index.begin(1);
     run_scan_command(
