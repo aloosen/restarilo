@@ -11,6 +11,7 @@ mod restic_killable;
 mod restic_ls;
 mod restic_tree;
 mod scan_scheduler;
+mod smb_unc;
 mod ssh;
 mod subtree_scan;
 mod subtree_scan_run;
