@@ -69,9 +69,14 @@
   color: var(--fg); background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 7px 10px; cursor: pointer;
 }
+.file-actions button.file-actions-primary {
+  color: var(--accent-ink); background: var(--accent); border-color: transparent;
+  font-weight: 600;
+}
 .file-actions button:disabled { opacity: 0.52; cursor: default; }
 .file-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .file-actions-busy { color: var(--muted); font-size: 13px; }
+.app-success { color: var(--accent); white-space: pre-wrap; }
 .app-action-bar {
   display: flex; align-items: center; gap: 8px; padding: 8px 22px;
   border-bottom: 1px solid var(--border); background: var(--side);

@@ -1,5 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
+import {
+  busyLabelFor,
+  joinTarget,
+  overwriteAskBody,
+  successMessage,
+  targetFromExistsError,
+  type ActionKind,
+} from "./actionFeedback";
 
 export type FileSelection = {
   path: string;
@@ -10,69 +18,69 @@ export type FileSelection = {
 type Props = {
   repoName: string;
   snapshotId: string;
+  snapshotLabel: string;
   selection: FileSelection | null;
   disabled?: boolean;
   actionBusy?: boolean;
   onActionId?: (id: string | null) => void;
+  onBusyLabel?: (label: string | null) => void;
+  onSuccess?: (message: string | null) => void;
   onError?: (message: string | null) => void;
 };
 
-function newActionId(): string {
-  return crypto.randomUUID();
-}
-
 async function pickFolder(): Promise<string | null> {
   const dir = await open({ directory: true, multiple: false });
-  if (dir === null) return null;
-  return typeof dir === "string" ? dir : null;
+  return dir === null ? null : typeof dir === "string" ? dir : null;
 }
 
-export function FileActions({
-  repoName,
-  snapshotId,
-  selection,
-  disabled,
-  actionBusy,
-  onActionId,
-  onError,
-}: Props) {
-  const noSel = !selection;
-  const block = disabled || !!actionBusy;
+export function FileActions(p: Props) {
+  const { selection } = p;
+  const block = p.disabled || !!p.actionBusy;
 
-  async function beginSession(): Promise<string> {
-    const id = newActionId();
+  async function begin(kind: ActionKind): Promise<string> {
+    p.onSuccess?.(null);
+    p.onError?.(null);
+    const id = crypto.randomUUID();
     await invoke("begin_action", { actionId: id });
-    onActionId?.(id);
+    p.onActionId?.(id);
+    p.onBusyLabel?.(busyLabelFor(kind));
     return id;
   }
 
-  function endSession() {
-    onActionId?.(null);
+  function end() {
+    p.onActionId?.(null);
+    p.onBusyLabel?.(null);
   }
 
-  async function invokeAction(
-    kind: "restore_path" | "dump_path" | "open_path",
+  async function call(
+    cmd: "restore_path" | "dump_path" | "open_path",
     payload: Record<string, unknown>,
     actionId: string,
-  ) {
+  ): Promise<string> {
     try {
-      await invoke(kind, { ...payload, actionId });
+      return await invoke<string>(cmd, { ...payload, actionId });
     } catch (e: unknown) {
-      const msg = String(e);
-      if (msg.includes("CANCELLED:")) return;
+      if (String(e).includes("CANCELLED:")) {
+        p.onSuccess?.(null);
+        p.onError?.(null);
+      }
       throw e;
     }
   }
 
-  async function runRestoreOrDump(kind: "restore_path" | "dump_path") {
+  async function runRestoreOrDump(cmd: "restore_path" | "dump_path") {
     if (!selection) return;
     const targetDir = await pickFolder();
     if (!targetDir) return;
-    onError?.(null);
-
+    const kind: ActionKind = cmd === "restore_path" ? "restore" : "export";
+    const expected = joinTarget(
+      targetDir,
+      selection.name,
+      cmd === "dump_path" && selection.is_dir,
+    );
     const base = {
-      repoName,
-      snapshotId,
+      repoName: p.repoName,
+      snapshotId: p.snapshotId,
       path: selection.path,
       name: selection.name,
       targetDir,
@@ -81,33 +89,40 @@ export function FileActions({
     async function attempt(overwrite: boolean) {
       let id: string;
       try {
-        id = await beginSession();
+        id = await begin(kind);
       } catch (e: unknown) {
-        onError?.(String(e));
+        p.onError?.(String(e));
         return;
       }
       try {
         const payload =
-          kind === "dump_path"
+          cmd === "dump_path"
             ? { ...base, isDir: selection!.is_dir, overwrite }
             : { ...base, overwrite };
-        await invokeAction(kind, payload, id);
+        const dest = await call(cmd, payload, id);
+        p.onSuccess?.(successMessage(kind, dest || expected));
       } catch (e: unknown) {
         const msg = String(e);
-        endSession();
+        end();
+        if (msg.includes("CANCELLED:")) return;
         if (msg.includes("TARGET_EXISTS:") && !overwrite) {
-          const ok = await ask("Target already exists. Overwrite?", {
-            title: "Overwrite?",
-            kind: "warning",
-          });
+          const target = targetFromExistsError(msg) ?? expected;
+          const ok = await ask(
+            overwriteAskBody({
+              sourcePath: selection!.path,
+              snapshotLabel: p.snapshotLabel,
+              targetPath: target,
+            }),
+            { title: "Overwrite?", kind: "warning" },
+          );
           if (!ok) return;
           await attempt(true);
           return;
         }
-        onError?.(msg);
+        p.onError?.(msg);
         return;
       }
-      endSession();
+      end();
     }
 
     await attempt(false);
@@ -115,30 +130,31 @@ export function FileActions({
 
   async function onOpen() {
     if (!selection || selection.is_dir) return;
-    onError?.(null);
     let id: string;
     try {
-      id = await beginSession();
+      id = await begin("open");
     } catch (e: unknown) {
-      onError?.(String(e));
+      p.onError?.(String(e));
       return;
     }
     try {
-      await invokeAction(
+      const dest = await call(
         "open_path",
         {
-          repoName,
-          snapshotId,
+          repoName: p.repoName,
+          snapshotId: p.snapshotId,
           path: selection.path,
           name: selection.name,
           isDir: false,
         },
         id,
       );
+      p.onSuccess?.(successMessage("open", dest || selection.name));
     } catch (e: unknown) {
-      onError?.(String(e));
+      const msg = String(e);
+      if (!msg.includes("CANCELLED:")) p.onError?.(msg);
     } finally {
-      endSession();
+      end();
     }
   }
 
@@ -146,21 +162,22 @@ export function FileActions({
     <div className="file-actions">
       <button
         type="button"
-        disabled={block || noSel}
+        className="file-actions-primary"
+        disabled={block || !selection}
         onClick={() => void runRestoreOrDump("restore_path")}
       >
         Restore
       </button>
       <button
         type="button"
-        disabled={block || noSel}
+        disabled={block || !selection}
         onClick={() => void runRestoreOrDump("dump_path")}
       >
-        Dump
+        Export
       </button>
       <button
         type="button"
-        disabled={block || noSel || !!selection?.is_dir}
+        disabled={block || !selection || !!selection?.is_dir}
         onClick={() => void onOpen()}
       >
         Open

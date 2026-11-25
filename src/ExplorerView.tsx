@@ -15,6 +15,7 @@ type Props = {
   snapshotLabel: string;
   actionBusy?: boolean;
   onActionId?: (id: string | null) => void;
+  onBusyLabel?: (label: string | null) => void;
 };
 
 export function ExplorerView({
@@ -23,6 +24,7 @@ export function ExplorerView({
   snapshotLabel,
   actionBusy = false,
   onActionId,
+  onBusyLabel,
 }: Props) {
   const b = useExplorerBrowse(repoName, snapshotId);
   const [treeWidth, setTreeWidth] = useState(TREE_DEFAULT);
@@ -89,6 +91,7 @@ export function ExplorerView({
         actionError={b.actionError}
         actionBusy={actionBusy}
         onActionId={onActionId}
+        onBusyLabel={onBusyLabel}
         onActionError={b.setActionError}
         onSelect={(e) =>
           b.setSelection({ path: e.path, name: e.name, is_dir: e.is_dir })

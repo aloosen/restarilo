@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { FileActions, type FileSelection } from "./FileActions";
 import {
   FileListing,
@@ -23,6 +24,7 @@ type Props = {
   actionError: string | null;
   actionBusy: boolean;
   onActionId?: (id: string | null) => void;
+  onBusyLabel?: (label: string | null) => void;
   onActionError: (message: string | null) => void;
   onSelect: (entry: DirEntry) => void;
   onNavigate: (path: string) => void;
@@ -31,11 +33,28 @@ type Props = {
 };
 
 export function ExplorerListing(p: Props) {
+  const [success, setSuccess] = useState<string | null>(null);
   const crumbs = breadcrumbParts(p.path);
   const heading = folderHeading(p.path);
   const statusSelection = p.selection
     ? `${p.selection.name} selected`
     : "No selection";
+
+  useEffect(() => {
+    setSuccess(null);
+    p.onActionError(null);
+  }, [p.repoName, p.snapshotId]);
+
+  useEffect(() => {
+    setSuccess(null);
+    p.onActionError(null);
+  }, [p.selection?.path]);
+
+  function onSelect(entry: DirEntry) {
+    setSuccess(null);
+    p.onActionError(null);
+    p.onSelect(entry);
+  }
 
   return (
     <div className="explorer-listing">
@@ -63,10 +82,13 @@ export function ExplorerListing(p: Props) {
           <FileActions
             repoName={p.repoName}
             snapshotId={p.snapshotId}
+            snapshotLabel={p.snapshotLabel}
             selection={p.listingReady ? p.selection : null}
             disabled={!p.listingReady || p.actionBusy}
             actionBusy={p.actionBusy}
             onActionId={p.onActionId}
+            onBusyLabel={p.onBusyLabel}
+            onSuccess={setSuccess}
             onError={p.onActionError}
           />
         </div>
@@ -91,6 +113,7 @@ export function ExplorerListing(p: Props) {
               </button>
             </div>
           )}
+          {success && <p className="app-success">{success}</p>}
           {p.actionError && <pre className="app-error">{p.actionError}</pre>}
           {(p.loading || !p.carryReady) && !p.carryError && (
             <p className="app-loading">Loading directory…</p>
@@ -103,7 +126,7 @@ export function ExplorerListing(p: Props) {
               path={p.path}
               entries={p.entries}
               selectedPath={p.selection?.path ?? null}
-              onSelect={p.onSelect}
+              onSelect={onSelect}
               onNavigate={p.onNavigate}
             />
           )}

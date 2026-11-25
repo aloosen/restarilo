@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
+import { formatSnapshotLabel } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import {
   SnapshotList,
@@ -21,6 +22,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const actionBusy = actionId !== null;
 
   useEffect(() => {
@@ -137,7 +139,9 @@ function App() {
 
       {actionBusy && (
         <div className="app-action-bar">
-          <span className="file-actions-busy">Working…</span>
+          <span className="file-actions-busy">
+            {busyLabel ?? "Working…"}
+          </span>
           <button type="button" onClick={onCancel}>
             Cancel
           </button>
@@ -149,11 +153,10 @@ function App() {
           <FileBrowser
             repoName={selectedRepo}
             snapshotId={selectedSnapshot.id}
-            snapshotLabel={
-              selectedSnapshot.short_id || selectedSnapshot.id.slice(0, 8)
-            }
+            snapshotLabel={formatSnapshotLabel(selectedSnapshot)}
             actionBusy={actionBusy}
             onActionId={setActionId}
+            onBusyLabel={setBusyLabel}
           />
         ) : (
           <div className="explorer-listing">
