@@ -91,6 +91,36 @@ insecure_no_password = true
 
 See also the [restic SFTP documentation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#sftp).
 
+### Windows UNC / SMB repositories
+
+On Windows, `[[repos]].path` may be a UNC location. Use a TOML literal string so
+backslashes stay intact. Forward-slash UNC is also accepted and normalized for
+Win32 and for `RESTIC_REPOSITORY`:
+
+```toml
+[[repos]]
+name = "team"
+path = '\\nas\backups\team-repo'
+password_file = "team.pass"
+
+[[repos]]
+name = "team-alt"
+path = '//nas/backups/team-repo'
+password_file = "team.pass"
+```
+
+If Windows already has a working session to the share, snapshots load without an
+extra dialog or mapped drive. If credentials are required, restarilo shows
+**Sign in to network share** (or **Try another account** when access is denied)
+and opens the native Windows dialog — it never opens that dialog on its own.
+Cancel keeps the repo selected so you can try again. Offline or slow shares
+leave loading within a deadline and offer **Retry** (including when a prior
+check is still finishing). SMB sign-in is separate from the restic repository
+password.
+
+On Linux, mount the SMB share yourself and point `path` at the mount (there is
+no interactive Windows SMB dialog).
+
 ### MVP verification fixtures
 
 Manual success check (local + SFTP, snapshot without tags):

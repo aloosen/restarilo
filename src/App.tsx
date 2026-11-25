@@ -5,11 +5,9 @@ import { BusyModal } from "./BusyModal";
 import { FileBrowser } from "./FileBrowser";
 import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
-import {
-  SnapshotList,
-  sortSnapshotsNewestFirst,
-  type SnapshotRow,
-} from "./SnapshotList";
+import { ShareAccessPanel } from "./ShareAccessPanel";
+import { SnapshotList } from "./SnapshotList";
+import { useSnapshotLoad } from "./useSnapshotLoad";
 
 type RepoName = { name: string };
 
@@ -28,14 +26,21 @@ function App() {
   const [reposReady, setReposReady] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState("");
-  const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
-  const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotRow | null>(null);
-  const [snapError, setSnapError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [snapReload, setSnapReload] = useState(0);
   const [actionId, setActionId] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const actionBusy = actionId !== null;
+  const {
+    snapshots,
+    selectedSnapshot,
+    snapError,
+    shareStatus,
+    loading,
+    retryList,
+    selectSnapshotId,
+    prepareRepoSwitch,
+    signIn,
+    tryAnotherAccount,
+  } = useSnapshotLoad(selectedRepo);
 
   useEffect(() => {
     invoke<RepoName[]>("list_repos")
@@ -49,35 +54,6 @@ function App() {
         setReposReady(true);
       });
   }, []);
-
-  useEffect(() => {
-    if (!selectedRepo) return;
-    let discarded = false;
-    setSelectedSnapshot(null);
-    setSnapshots([]);
-    setLoading(true);
-    setSnapError(null);
-    invoke<SnapshotRow[]>("list_snapshots", { repoName: selectedRepo })
-      .then((rows) => {
-        if (discarded) return;
-        const sorted = sortSnapshotsNewestFirst(rows);
-        setSnapshots(sorted);
-        setSelectedSnapshot(sorted[0] ?? null);
-      })
-      .catch((e: unknown) => {
-        if (discarded) return;
-        setSnapshots([]);
-        setSelectedSnapshot(null);
-        setSnapError(String(e));
-      })
-      .finally(() => {
-        if (!discarded) setLoading(false);
-      });
-    return () => {
-      discarded = true;
-      clearListDirCacheForRepo(selectedRepo);
-    };
-  }, [selectedRepo, snapReload]);
 
   const onCancel = useCallback(() => {
     if (actionId) void invoke("cancel_action", { actionId });
@@ -98,16 +74,18 @@ function App() {
   function onSelectRepo(name: string) {
     if (name === selectedRepo) return;
     clearListDirCacheForRepo(selectedRepo);
-    setSelectedSnapshot(null);
-    setSnapshots([]);
-    setSnapError(null);
-    setLoading(true);
+    prepareRepoSwitch();
     setSelectedRepo(name);
   }
 
   const emptyRepo =
-    !loading && !snapError && selectedRepo !== "" && snapshots.length === 0;
-  const showExplorer = selectedSnapshot !== null && !loading && !snapError;
+    !loading &&
+    !snapError &&
+    !shareStatus &&
+    selectedRepo !== "" &&
+    snapshots.length === 0;
+  const showExplorer =
+    selectedSnapshot !== null && !loading && !snapError && !shareStatus;
   const zeroRepos = reposReady && !configError && repos.length === 0;
   const topDirs = selectedSnapshot
     ? formatSnapshotTopDirs(selectedSnapshot.paths)
@@ -115,6 +93,7 @@ function App() {
 
   let emptyMsg = "Loading snapshots…";
   if (configError || zeroRepos) emptyMsg = "Configure a repository to browse snapshots.";
+  else if (shareStatus) emptyMsg = "Network share access required.";
   else if (snapError) emptyMsg = "Could not load snapshots. Use Retry next to the snapshot control.";
   else if (emptyRepo) emptyMsg = "No snapshots in this repository.";
 
@@ -162,10 +141,15 @@ function App() {
                 loading={loading}
                 disabled={actionBusy}
                 listError={snapError}
-                onSelectId={(id) =>
-                  setSelectedSnapshot(snapshots.find((s) => s.id === id) ?? null)
-                }
-                onRetryList={() => selectedRepo && setSnapReload((n) => n + 1)}
+                onSelectId={selectSnapshotId}
+                onRetryList={retryList}
+              />
+              <ShareAccessPanel
+                status={shareStatus}
+                disabled={actionBusy || loading}
+                onSignIn={signIn}
+                onTryAnotherAccount={tryAnotherAccount}
+                onRetry={retryList}
               />
             </>
           )}
