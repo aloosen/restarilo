@@ -30,6 +30,7 @@ export function FolderTree({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["/"]));
   const [branches, setBranches] = useState<Record<string, BranchState>>({});
   const branchGen = useRef<Record<string, number>>({});
+  const activeGeneration = useRef<number | null>(null);
   const identityRef = useRef(identity);
   const treeRef = useRef<HTMLUListElement>(null);
   identityRef.current = identity;
@@ -38,22 +39,28 @@ export function FolderTree({
     setExpanded(new Set(["/"]));
     setBranches({});
     branchGen.current = {};
+    activeGeneration.current = null;
   }, [repoName, snapshotId]);
 
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    void subscribeFolderIndex(repoName, snapshotId, (ev) => {
-      if (!alive || identityRef.current !== `${repoName}\0${snapshotId}`) return;
-      setBranches((prev) => {
-        const cur = prev[ev.parentPath];
-        const dirs = mergeFolderDirs(cur?.dirs ?? [], ev.dirs);
-        return {
-          ...prev,
-          [ev.parentPath]: mergeBranchFromEvent(cur, dirs, ev.childrenComplete),
-        };
-      });
-    }).then((u) => {
+    void subscribeFolderIndex(
+      repoName,
+      snapshotId,
+      () => activeGeneration.current,
+      (ev) => {
+        if (!alive || identityRef.current !== `${repoName}\0${snapshotId}`) return;
+        setBranches((prev) => {
+          const cur = prev[ev.parentPath];
+          const dirs = mergeFolderDirs(cur?.dirs ?? [], ev.dirs);
+          return {
+            ...prev,
+            [ev.parentPath]: mergeBranchFromEvent(cur, dirs, ev.childrenComplete),
+          };
+        });
+      },
+    ).then((u) => {
       unlisten = u;
     });
     return () => {
@@ -85,6 +92,7 @@ export function FolderTree({
         .then((res) => {
           if (identityRef.current !== startedIdentity) return;
           if (branchGen.current[branchPath] !== gen) return;
+          activeGeneration.current = res.generation;
           setBranches((prev) => ({
             ...prev,
             [branchPath]: applyFolderDirsResult(

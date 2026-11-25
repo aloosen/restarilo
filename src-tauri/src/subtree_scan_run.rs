@@ -105,7 +105,7 @@ pub fn run_scan_command(
         else {
             continue;
         };
-        index.upsert_dirs(
+        let accepted = index.upsert_dirs(
             generation,
             repo,
             snapshot_id,
@@ -113,7 +113,9 @@ pub fn run_scan_command(
             &[child_fc.clone()],
             false,
         );
-        on_batch(&parent, &[child_fc]);
+        if accepted {
+            on_batch(&parent, &[child_fc]);
+        }
         nodes += 1;
         if nodes >= opts.node_budget {
             stop = ScanStop::NodeBudget;

@@ -6,6 +6,7 @@ export type FolderDirsResult = {
   dirs: { name: string; path: string }[];
   children_complete: boolean;
   scan_status: string;
+  generation: number;
 };
 
 export type FolderIndexUpdated = {
@@ -61,15 +62,21 @@ export function loadFolderDirs(
   });
 }
 
+/** Active generation: number from last successful load, or null while unset. */
+export type ActiveGeneration = number | null;
+
 export function subscribeFolderIndex(
   repoName: string,
   snapshotId: string,
+  getActiveGeneration: () => ActiveGeneration,
   onUpdate: (ev: FolderIndexUpdated) => void,
 ): Promise<UnlistenFn> {
   return listen<Record<string, unknown>>("folder-index-updated", (e) => {
     const ev = normalizeEvent(e.payload);
     if (!ev) return;
     if (ev.repoName !== repoName || ev.snapshotId !== snapshotId) return;
+    const active = getActiveGeneration();
+    if (active === null || ev.generation !== active) return;
     onUpdate(ev);
   });
 }

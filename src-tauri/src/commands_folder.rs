@@ -117,6 +117,7 @@ pub struct FolderDirsResult {
     pub dirs: Vec<FolderChild>,
     pub children_complete: bool,
     pub scan_status: ScanStatusKind,
+    pub generation: u64,
 }
 
 #[tauri::command]
@@ -185,6 +186,7 @@ pub async fn list_folder_dirs(
                 dirs,
                 children_complete: complete,
                 scan_status: scan.status(),
+                generation,
             })
         })();
         scan.scan_user_leave();
