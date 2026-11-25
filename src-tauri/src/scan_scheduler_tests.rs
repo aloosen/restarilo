@@ -164,3 +164,23 @@ fn emit_reaches_test_sink() {
     sched.emit_dirs(1, "r", "s", "/", &[], false);
     assert_eq!(*seen.lock().unwrap(), 1);
 }
+
+#[test]
+fn scan_user_guard_leaves_on_drop_and_panic() {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    let idx = Arc::new(FolderIndex::new());
+    let sched = ScanScheduler::new(idx);
+    assert_eq!(sched.activity(), 0);
+    {
+        let _g = sched.scan_user_guard();
+        assert_eq!(sched.activity(), 1);
+    }
+    assert_eq!(sched.activity(), 0);
+    let s2 = sched.clone();
+    let caught = catch_unwind(AssertUnwindSafe(|| {
+        let _g = s2.scan_user_guard();
+        panic!("force drop");
+    }));
+    assert!(caught.is_err());
+    assert_eq!(sched.activity(), 0);
+}

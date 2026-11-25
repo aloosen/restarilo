@@ -62,51 +62,46 @@ pub async fn list_dir(
     let index = state.folder_index.clone();
     let generation = cache.generation();
     tauri::async_runtime::spawn_blocking(move || {
-        prefetch.user_enter();
-        scan.scan_user_enter();
-        let result = (|| {
-            let cfg = cached_config()?;
-            if cache.generation() != generation {
-                return Err("CANCELLED: stale cache generation".into());
+        let _prefetch = prefetch.user_guard();
+        let _scan = scan.scan_user_guard();
+        let cfg = cached_config()?;
+        if cache.generation() != generation {
+            return Err("CANCELLED: stale cache generation".into());
+        }
+        let entries =
+            restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)?;
+        let dirs: Vec<FolderChild> = entries
+            .iter()
+            .filter(|e| e.is_dir)
+            .map(|e| FolderChild {
+                name: e.name.clone(),
+                path: e.path.clone(),
+            })
+            .collect();
+        index.upsert_dirs(
+            generation,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &dirs,
+            true,
+        );
+        scan.emit_dirs(
+            generation,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &dirs,
+            true,
+        );
+        if let Some(tid) =
+            crate::tree_walk::cached_tree_id_for_path(&cache, &snapshot_id, &path)
+        {
+            if let Some(listing) = cache.get_cached(&tid) {
+                prefetch.enqueue_child_subtrees(generation, &repo_name, &listing);
             }
-            let entries =
-                restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)?;
-            let dirs: Vec<FolderChild> = entries
-                .iter()
-                .filter(|e| e.is_dir)
-                .map(|e| FolderChild {
-                    name: e.name.clone(),
-                    path: e.path.clone(),
-                })
-                .collect();
-            index.upsert_dirs(
-                generation,
-                &repo_name,
-                &snapshot_id,
-                &path,
-                &dirs,
-                true,
-            );
-            scan.emit_dirs(
-                generation,
-                &repo_name,
-                &snapshot_id,
-                &path,
-                &dirs,
-                true,
-            );
-            if let Some(tid) =
-                crate::tree_walk::cached_tree_id_for_path(&cache, &snapshot_id, &path)
-            {
-                if let Some(listing) = cache.get_cached(&tid) {
-                    prefetch.enqueue_child_subtrees(generation, &repo_name, &listing);
-                }
-            }
-            Ok(entries)
-        })();
-        scan.scan_user_leave();
-        prefetch.user_leave();
-        result
+        }
+        Ok(entries)
     })
     .await
     .map_err(|e| format!("list_dir task failed: {e}"))?
@@ -136,8 +131,8 @@ pub async fn list_folder_dirs(
         return Err("CANCELLED: stale cache generation".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        scan.scan_user_enter();
         let result = (|| {
+            let _scan = scan.scan_user_guard();
             if cache.generation() != generation {
                 return Err("CANCELLED: stale cache generation".into());
             }
@@ -189,7 +184,6 @@ pub async fn list_folder_dirs(
                 generation,
             })
         })();
-        scan.scan_user_leave();
         if !prioritize {
             scan.maybe_idle_start();
         }

@@ -93,6 +93,10 @@ impl ScanScheduler {
     pub fn scan_user_leave(&self) {
         self.activity.fetch_sub(1, Ordering::SeqCst);
     }
+    pub fn scan_user_guard(self: &Arc<Self>) -> ScanUserGuard {
+        self.scan_user_enter();
+        ScanUserGuard(self.clone())
+    }
     pub fn activity(&self) -> u32 {
         self.activity.load(Ordering::SeqCst)
     }
@@ -104,6 +108,14 @@ impl ScanScheduler {
         g.repo = repo.into();
         g.snapshot_id = snapshot_id.into();
         g.preferred_root = "/".into();
+    }
+}
+
+pub struct ScanUserGuard(Arc<ScanScheduler>);
+
+impl Drop for ScanUserGuard {
+    fn drop(&mut self) {
+        self.0.scan_user_leave();
     }
 }
 
