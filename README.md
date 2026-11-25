@@ -4,7 +4,7 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
-Browse snapshots in an Explorer-style layout: repository and snapshot selectors stay above the browser, with a folder tree on the left and the current folder listing on the right. When a repository loads, the newest snapshot is selected automatically (by normalized snapshot time). In the tree, the twist control expands or collapses child folders without changing the current directory; clicking a folder name navigates there. Expand failures are retryable on that branch. Tree, breadcrumb, and listing stay on one current path; the listing chrome shows repo, snapshot, current path, and the selected path when a row is selected. The listing shows folders before files (name order within each group), integer byte sizes when available, and a breadcrumb for the current path. Keyboard: arrows move the row focus, Enter opens a folder, Space selects a file or folder. From the listing you can restore or dump a selection, or open a file.
+Browse snapshots in an Explorer-style layout: repository and snapshot selectors stay above the browser, with a folder tree on the left and the current folder listing on the right. When a repository loads, the newest snapshot is selected automatically (by normalized snapshot time). In the tree, the twist control expands or collapses child folders without changing the current directory; clicking a folder name navigates there. Expand failures are retryable on that branch. Tree, breadcrumb, and listing stay on one current path; the listing chrome shows repo, snapshot, current path, and the selected path when a row is selected. The listing shows folders before files (name order within each group), integer byte sizes when available, and a breadcrumb for the current path. Keyboard: arrows move the row focus, Enter opens a folder, Space selects a file or folder. Switching snapshots in the **same** repository keeps the current absolute folder when it still exists as a directory (including empty); otherwise the nearest existing ancestor is opened and a short requested→displayed note appears. Changing repositories always starts at `/`. After a snapshot or repository change, Restore / Dump / Open stay disabled until you select a row again in the active listing.
 
 After the snapshot list loads, the newest snapshot’s root tree is prefetched; after you open a directory, up to four child folders are queued (one background fetch). An optional on-disk cache (see `cache_dir`) keeps listings across restarts. The in-memory session cache is capped at about 32 MiB (LRU).
 
@@ -106,6 +106,39 @@ cd src-tauri && cargo test --lib live_local_and_sftp_snapshots -- --nocapture
 ```
 
 Missing fixtures fail the live test (no silent skip).
+
+### Explorer path-carry fixtures (#6)
+
+Restic stores the **path argument** as the snapshot path. Backup `Documents` from `$FIX/docs` (not `$FIX/docs/Documents`) so entries appear as `/Documents/Taxes`, not a host-absolute path under `/tmp/…`.
+
+```bash
+FIX=/tmp/restarilo-z1
+# Assumes local + SFTP repos already initialized and the $FIX/data backup exists
+# (fallback: open /Documents/Taxes then switch to the data-only snapshot → /).
+
+mkdir -p "$FIX/docs/Documents/Taxes"
+echo v1 > "$FIX/docs/Documents/Taxes/note.txt"
+# Snapshot with /Documents/Taxes/note.txt = v1 (both backends)
+( cd "$FIX/docs" && restic -r "$FIX/local-repo" backup Documents --insecure-no-password )
+( cd "$FIX/docs" && restic -r "$FIX/sftp-repo" backup Documents --insecure-no-password )
+
+echo v2 > "$FIX/docs/Documents/Taxes/note.txt"
+# Same path, different contents (restore-after-switch)
+( cd "$FIX/docs" && restic -r "$FIX/local-repo" backup Documents --insecure-no-password )
+( cd "$FIX/docs" && restic -r "$FIX/sftp-repo" backup Documents --insecure-no-password )
+
+# Empty /Documents/Taxes
+rm -f "$FIX/docs/Documents/Taxes/note.txt"
+( cd "$FIX/docs" && restic -r "$FIX/local-repo" backup Documents --insecure-no-password )
+( cd "$FIX/docs" && restic -r "$FIX/sftp-repo" backup Documents --insecure-no-password )
+
+# /Documents without Taxes (ancestor fallback to /Documents)
+rm -rf "$FIX/docs/Documents/Taxes"
+( cd "$FIX/docs" && restic -r "$FIX/local-repo" backup Documents --insecure-no-password )
+( cd "$FIX/docs" && restic -r "$FIX/sftp-repo" backup Documents --insecure-no-password )
+```
+
+Do **not** run `restic backup "$FIX/docs/Documents"` — that embeds the absolute host path in the snapshot.
 
 ### Restore / dump / open (manual)
 

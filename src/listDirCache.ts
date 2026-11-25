@@ -60,3 +60,36 @@ export function loadListDir(
   inflight.set(k, req);
   return req;
 }
+
+/** Nearest existing directory for `requested` in the snapshot (incl. empty dirs). */
+export async function resolveCarryPath(
+  repoName: string,
+  snapshotId: string,
+  requested: string,
+): Promise<{ path: string; note: string | null }> {
+  if (requested === "/" || requested === "") return { path: "/", note: null };
+  const segs = requested.split("/").filter(Boolean);
+  let acc = "";
+  let lastDir = "/";
+  for (const seg of segs) {
+    const parent = acc === "" ? "/" : acc;
+    let rows: DirEntry[];
+    try {
+      rows = await loadListDir(repoName, snapshotId, parent);
+    } catch {
+      return {
+        path: lastDir,
+        note: `Could not resolve ${requested}; showing ${lastDir}`,
+      };
+    }
+    const child = rows.find((e) => e.name === seg);
+    if (!child || !child.is_dir) {
+      const note =
+        lastDir === requested ? null : `Requested ${requested}; showing ${lastDir}`;
+      return { path: lastDir, note };
+    }
+    acc = `${acc}/${seg}`;
+    lastDir = acc;
+  }
+  return { path: lastDir, note: null };
+}

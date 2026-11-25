@@ -5,6 +5,7 @@ import { FolderTree } from "./FolderTree";
 import {
   clearListDirCacheForRepo,
   loadListDir,
+  resolveCarryPath,
   type DirEntry,
 } from "./listDirCache";
 
@@ -31,33 +32,72 @@ export function ExplorerView({
   const [selection, setSelection] = useState<FileSelection | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [carryNote, setCarryNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [carryReady, setCarryReady] = useState(true);
   const [loadedPath, setLoadedPath] = useState<string | null>(null);
   const [loadedIdentity, setLoadedIdentity] = useState<string | null>(null);
   const prevRepo = useRef(repoName);
+  const prevSnap = useRef(snapshotId);
+  const pathRef = useRef(path);
+  pathRef.current = path;
 
   useEffect(() => {
-    if (prevRepo.current !== repoName) {
+    const repoChanged = prevRepo.current !== repoName;
+    const snapChanged = prevSnap.current !== snapshotId;
+    if (repoChanged) {
       clearListDirCacheForRepo(prevRepo.current);
       prevRepo.current = repoName;
+      prevSnap.current = snapshotId;
+      setPath("/");
+      setCarryNote(null);
+      setSelection(null);
+      setEntries([]);
+      setLoadError(null);
+      setActionError(null);
+      setLoading(true);
+      setLoadedPath(null);
+      setLoadedIdentity(null);
+      setCarryReady(true);
+      return;
     }
-    setPath("/");
-    setEntries([]);
+    if (!snapChanged) return;
+    prevSnap.current = snapshotId;
+    const requested = pathRef.current;
     setSelection(null);
-    setLoadError(null);
     setActionError(null);
+    setCarryNote(null);
+    setCarryReady(false);
     setLoading(true);
+    setEntries([]);
     setLoadedPath(null);
     setLoadedIdentity(null);
+    let discarded = false;
+    resolveCarryPath(repoName, snapshotId, requested)
+      .then((r) => {
+        if (discarded) return;
+        setPath(r.path);
+        setCarryNote(r.note);
+        setCarryReady(true);
+      })
+      .catch((e: unknown) => {
+        if (discarded) return;
+        setPath("/");
+        setCarryNote(String(e));
+        setCarryReady(true);
+      });
+    return () => {
+      discarded = true;
+    };
   }, [repoName, snapshotId]);
 
   useEffect(() => {
+    if (!carryReady) return;
     let discarded = false;
     setLoading(true);
     setLoadedPath(null);
     setLoadedIdentity(null);
     setLoadError(null);
-    setActionError(null);
     setEntries([]);
     setSelection(null);
     const requestedPath = path;
@@ -82,9 +122,10 @@ export function ExplorerView({
     return () => {
       discarded = true;
     };
-  }, [repoName, snapshotId, path, activeIdentity]);
+  }, [repoName, snapshotId, path, activeIdentity, carryReady]);
 
   function navigateTo(next: string) {
+    setCarryNote(null);
     setLoading(true);
     setLoadedPath(null);
     setLoadedIdentity(null);
@@ -96,7 +137,11 @@ export function ExplorerView({
   }
 
   const listingReady =
-    !loading && loadedPath === path && loadedIdentity === activeIdentity && !loadError;
+    carryReady &&
+    !loading &&
+    loadedPath === path &&
+    loadedIdentity === activeIdentity &&
+    !loadError;
 
   return (
     <>
@@ -126,6 +171,7 @@ export function ExplorerView({
             />
           </div>
           <div className="file-browser-body">
+            {carryNote && <p className="app-loading">{carryNote}</p>}
             {loadError && (
               <div>
                 <pre className="app-error">{loadError}</pre>
@@ -135,7 +181,7 @@ export function ExplorerView({
               </div>
             )}
             {actionError && <pre className="app-error">{actionError}</pre>}
-            {loading && <p className="app-loading">Loading directory…</p>}
+            {(loading || !carryReady) && <p className="app-loading">Loading directory…</p>}
             {listingReady && (
               <FileListing
                 path={path}

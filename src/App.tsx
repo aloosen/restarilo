@@ -124,6 +124,7 @@ function App() {
       <section className="explorer">
         {selectedSnapshot ? (
           <FileBrowser
+            key={selectedRepo}
             repoName={selectedRepo}
             snapshotId={selectedSnapshot.id}
             snapshotLabel={
