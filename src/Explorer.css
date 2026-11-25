@@ -139,7 +139,7 @@
   border-radius: 8px; padding: 8px 16px; cursor: pointer; font: inherit; font-weight: 600;
 }
 .busy-modal-hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
-.overwrite-modal { text-align: left; }
+.overwrite-modal { text-align: left; width: min(560px, 100%); }
 .overwrite-modal-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
 .overwrite-modal-dl {
   display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 18px;
