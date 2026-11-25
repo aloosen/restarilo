@@ -28,6 +28,7 @@ export function ExplorerView({
 }: Props) {
   const b = useExplorerBrowse(repoName, snapshotId);
   const [treeWidth, setTreeWidth] = useState(TREE_DEFAULT);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
 
   const onSplitPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
@@ -54,26 +55,51 @@ export function ExplorerView({
 
   return (
     <>
-      <div className="explorer-tree" style={{ flexBasis: treeWidth, width: treeWidth }}>
-        <FolderTree
-          repoName={repoName}
-          snapshotId={snapshotId}
-          currentPath={b.path}
-          onNavigate={b.navigateTo}
+      {!treeCollapsed && (
+        <div className="explorer-tree" style={{ flexBasis: treeWidth, width: treeWidth }}>
+          <div className="explorer-tree-header">
+            <span className="explorer-tree-title">Folders</span>
+            <button
+              type="button"
+              className="explorer-tree-toggle"
+              aria-expanded={true}
+              onClick={() => setTreeCollapsed(true)}
+            >
+              Hide
+            </button>
+          </div>
+          <FolderTree
+            repoName={repoName}
+            snapshotId={snapshotId}
+            currentPath={b.path}
+            onNavigate={b.navigateTo}
+          />
+        </div>
+      )}
+      {!treeCollapsed && (
+        <div
+          className="explorer-split"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize tree and listing"
+          aria-valuenow={treeWidth}
+          tabIndex={0}
+          onPointerDown={onSplitPointerDown}
+          onPointerMove={onSplitPointerMove}
+          onPointerUp={onSplitPointerUp}
+          onPointerCancel={onSplitPointerUp}
         />
-      </div>
-      <div
-        className="explorer-split"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize tree and listing"
-        aria-valuenow={treeWidth}
-        tabIndex={0}
-        onPointerDown={onSplitPointerDown}
-        onPointerMove={onSplitPointerMove}
-        onPointerUp={onSplitPointerUp}
-        onPointerCancel={onSplitPointerUp}
-      />
+      )}
+      {treeCollapsed && (
+        <button
+          type="button"
+          className="explorer-tree-show"
+          aria-expanded={false}
+          onClick={() => setTreeCollapsed(false)}
+        >
+          Show folders
+        </button>
+      )}
       <ExplorerListing
         repoName={repoName}
         snapshotId={snapshotId}

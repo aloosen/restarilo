@@ -14,8 +14,10 @@ type Props = {
   selectedId: string | null;
   loading: boolean;
   disabled?: boolean;
-  error: string | null;
+  /** Failed list_snapshots — distinct from empty repo. */
+  listError: string | null;
   onSelectId: (id: string) => void;
+  onRetryList?: () => void;
 };
 
 function instantMs(time: string): number {
@@ -38,11 +40,12 @@ export function SnapshotList({
   selectedId,
   loading,
   disabled,
-  error,
+  listError,
   onSelectId,
+  onRetryList,
 }: Props) {
   const sorted = sortSnapshotsNewestFirst(snapshots);
-  const empty = sorted.length === 0;
+  const empty = sorted.length === 0 && !listError;
   const selected = sorted.find((s) => s.id === selectedId);
 
   return (
@@ -51,11 +54,13 @@ export function SnapshotList({
         Snapshot{" "}
         <select
           value={selectedId ?? ""}
-          disabled={disabled || loading || empty}
+          disabled={disabled || loading || empty || !!listError}
           title={selected ? selected.id : undefined}
           onChange={(e) => onSelectId(e.target.value)}
         >
-          {empty && <option value="">No snapshots</option>}
+          {(empty || listError) && (
+            <option value="">{listError ? "Unavailable" : "No snapshots"}</option>
+          )}
           {sorted.map((s) => (
             <option key={s.id} value={s.id} title={s.id}>
               {formatSnapshotLabel(s)}
@@ -64,7 +69,16 @@ export function SnapshotList({
         </select>
       </label>
       {loading && <span className="app-loading">Loading snapshots…</span>}
-      {error && <pre className="app-error">{error}</pre>}
+      {listError && (
+        <div className="app-snap-error">
+          <pre className="app-error">{listError}</pre>
+          {onRetryList && (
+            <button type="button" onClick={onRetryList} disabled={disabled || loading}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

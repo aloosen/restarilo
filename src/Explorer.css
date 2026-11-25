@@ -26,7 +26,19 @@
   min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column;
 }
 .explorer-tree {
-  flex: 0 0 auto; background: var(--side); border-right: 1px solid var(--border); padding: 19px 11px;
+  flex: 0 0 auto; background: var(--side); border-right: 1px solid var(--border); padding: 12px 11px 19px;
+}
+.explorer-tree-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 8px 10px;
+}
+.explorer-tree-title { font-size: 12px; font-weight: 650; }
+.explorer-tree-toggle,
+.explorer-tree-show {
+  color: var(--accent); background: transparent; border: 0; padding: 4px 6px; cursor: pointer; font: inherit;
+}
+.explorer-tree-show {
+  flex: 0 0 auto; align-self: stretch; writing-mode: vertical-rl; transform: rotate(180deg);
+  border-right: 1px solid var(--border); background: var(--side); padding: 12px 6px;
 }
 .explorer-split {
   flex: 0 0 6px; background: var(--border); cursor: col-resize; touch-action: none;
