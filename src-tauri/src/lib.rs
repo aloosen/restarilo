@@ -4,6 +4,7 @@ mod restic_bin;
 mod restic_cmd;
 mod restic_killable;
 mod restic_ls;
+mod restic_tree;
 mod ssh;
 
 use config::Config;

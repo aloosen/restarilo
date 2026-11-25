@@ -1,67 +1,18 @@
 use crate::config::{exe_dir, Config, PasswordMode, RepoConfig};
 use crate::restic_bin;
 use crate::ssh;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::process::{Command, Stdio};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotRow {
-    pub id: String,
-    pub short_id: String,
-    pub time: String,
-    pub hostname: String,
-    pub paths: Vec<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct ResticSnapshot {
-    #[serde(default)]
-    short_id: String,
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    time: String,
-    #[serde(default)]
-    hostname: String,
-    #[serde(default)]
-    paths: Vec<String>,
-    #[serde(default)]
-    tags: Vec<String>,
-}
+#[path = "restic_snapshots.rs"]
+mod restic_snapshots;
+pub use restic_snapshots::{list_snapshots, SnapshotRow};
 
 pub fn find_repo<'a>(cfg: &'a Config, name: &str) -> Result<&'a RepoConfig, String> {
     cfg.repos
         .iter()
         .find(|r| r.name == name)
         .ok_or_else(|| format!("unknown repo '{name}'"))
-}
-
-pub fn list_snapshots(cfg: &Config, repo_name: &str) -> Result<Vec<SnapshotRow>, String> {
-    let raw = run_restic(cfg, repo_name, &["snapshots", "--json"])?;
-    let parsed: Vec<ResticSnapshot> = serde_json::from_str(raw.trim())
-        .map_err(|e| format!("failed to parse snapshots JSON: {e}"))?;
-    Ok(parsed
-        .into_iter()
-        .map(|s| {
-            let short_id = if !s.short_id.is_empty() {
-                s.short_id.clone()
-            } else if s.id.len() >= 8 {
-                s.id[..8].to_string()
-            } else {
-                s.id.clone()
-            };
-            SnapshotRow {
-                id: s.id,
-                short_id,
-                time: s.time,
-                hostname: s.hostname,
-                paths: s.paths,
-                tags: s.tags,
-            }
-        })
-        .collect())
 }
 
 pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Command, String> {
@@ -125,10 +76,18 @@ mod tests {
 
     #[test]
     fn parse_snapshot_without_tags_field() {
-        let raw = r#"[{"short_id":"abc123","time":"2024-01-01T00:00:00Z","hostname":"host","paths":["/data"]}]"#;
-        let parsed: Vec<ResticSnapshot> = serde_json::from_str(raw).unwrap();
+        let raw = r#"[{"id":"x","short_id":"abc123","time":"2024-01-01T00:00:00Z","hostname":"host","paths":["/data"],"tree":"abcd"}]"#;
+        let parsed = restic_snapshots::parse_snapshot_rows_json(raw).unwrap();
         assert_eq!(parsed[0].tags.len(), 0);
         assert_eq!(parsed[0].short_id, "abc123");
+        assert_eq!(parsed[0].tree, "abcd");
+    }
+
+    #[test]
+    fn skip_snapshots_without_tree() {
+        let raw = r#"[{"id":"x","short_id":"abc","time":"t","hostname":"h","paths":[],"tree":""}]"#;
+        let parsed = restic_snapshots::parse_snapshot_rows_json(raw).unwrap();
+        assert!(parsed.is_empty());
     }
 
     #[derive(Deserialize)]
