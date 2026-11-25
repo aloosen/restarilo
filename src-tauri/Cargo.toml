@@ -21,6 +21,13 @@ dirs = "6"
 open = "5.4.5"
 tauri-plugin-dialog = "2.8.4"
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_WNet",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [profile.release]
 codegen-units = 1
 lto = true
