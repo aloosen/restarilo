@@ -2,6 +2,7 @@ use crate::restic_tree::TreeChild;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const FORMAT_VERSION: u32 = 1;
@@ -33,11 +34,15 @@ struct DiskChild {
 
 pub struct TreeDiskCache {
     root: PathBuf,
+    lock: Mutex<()>,
 }
 
 impl TreeDiskCache {
     pub fn open(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            lock: Mutex::new(()),
+        }
     }
 
     fn entry_path(&self, repo_id: &str, tree_id: &str) -> PathBuf {
@@ -48,6 +53,7 @@ impl TreeDiskCache {
     }
 
     pub fn get(&self, repo_id: &str, tree_id: &str) -> Option<Vec<TreeChild>> {
+        let _g = self.lock.lock().unwrap();
         let path = self.entry_path(repo_id, tree_id);
         let raw = fs::read_to_string(&path).ok()?;
         let parsed: DiskListing = serde_json::from_str(&raw).ok()?;
@@ -83,6 +89,7 @@ impl TreeDiskCache {
     }
 
     pub fn put(&self, repo_id: &str, tree_id: &str, children: &[TreeChild]) {
+        let _g = self.lock.lock().unwrap();
         if !is_tree_id(tree_id) {
             return;
         }
@@ -177,92 +184,5 @@ fn touch_mtime(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn round_trip_and_ignore_junk() {
-        let dir = std::env::temp_dir().join(format!("restarilo-disk-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("junk.bin"), vec![0u8; 10]).unwrap();
-        let cache = TreeDiskCache::open(dir.clone());
-        let kids = vec![TreeChild {
-            name: "a".into(),
-            is_dir: true,
-            entry_type: "dir".into(),
-            size: None,
-            mtime: None,
-            subtree: Some("abc".into()),
-        }];
-        let tid = "aa".repeat(32);
-        cache.put("repo1", &tid, &kids);
-        let got = cache.get("repo1", &tid).unwrap();
-        assert_eq!(got[0].name, "a");
-        assert!(dir.join("junk.bin").exists());
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn eviction_only_removes_valid_64hex_entries() {
-        let dir = std::env::temp_dir().join(format!("restarilo-disk-evict-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        let repo_dir = dir.join("v1").join("repo1");
-        fs::create_dir_all(&repo_dir).unwrap();
-        // Short hex stem — must never be treated as a cache entry or deleted.
-        let foreign = repo_dir.join("deadbeef.json");
-        fs::write(&foreign, vec![b'x'; 128]).unwrap();
-        let cache = TreeDiskCache::open(dir.clone());
-        // Each listing is ~2 KiB; three exceed the 4 KiB test budget.
-        let bulky = "n".repeat(1800);
-        let mut tids = Vec::new();
-        for i in 0..3u8 {
-            let tid: String = format!("{i:02x}").repeat(32);
-            cache.put(
-                "repo1",
-                &tid,
-                &[TreeChild {
-                    name: bulky.clone(),
-                    is_dir: false,
-                    entry_type: "file".into(),
-                    size: None,
-                    mtime: None,
-                    subtree: None,
-                }],
-            );
-            tids.push(tid);
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-        assert!(foreign.exists(), "deadbeef.json must survive eviction");
-        let present: usize = tids.iter().filter(|t| cache.get("repo1", t).is_some()).count();
-        assert!(
-            present < tids.len(),
-            "budget overflow must evict at least one valid entry (present={present})"
-        );
-        assert!(
-            present >= 1,
-            "at least one valid entry should remain after eviction"
-        );
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn skip_oversized_single_entry() {
-        let dir = std::env::temp_dir().join(format!("restarilo-disk-big-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let cache = TreeDiskCache::open(dir.clone());
-        let kids = vec![TreeChild {
-            name: "x".repeat((DISK_BUDGET as usize) + 8),
-            is_dir: false,
-            entry_type: "file".into(),
-            size: None,
-            mtime: None,
-            subtree: None,
-        }];
-        let tid = "cc".repeat(32);
-        cache.put("repo1", &tid, &kids);
-        assert!(cache.get("repo1", &tid).is_none());
-        let _ = fs::remove_dir_all(&dir);
-    }
-}
+#[path = "tree_disk_cache_tests.rs"]
+mod tests;
