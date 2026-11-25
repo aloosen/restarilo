@@ -1,6 +1,7 @@
 mod app_state;
 mod commands;
 mod config;
+mod folder_index;
 mod restic_actions;
 mod restic_bin;
 mod restic_cmd;
@@ -10,8 +11,13 @@ mod restic_tree;
 mod ssh;
 mod tree_cache;
 mod tree_disk_cache;
+mod subtree_scan;
+mod subtree_scan_run;
 mod tree_prefetch;
 mod tree_walk;
+
+#[cfg(test)]
+mod z1_acceptance_bench;
 
 use app_state::AppState;
 use std::sync::Arc;
