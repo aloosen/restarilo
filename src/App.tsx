@@ -11,6 +11,12 @@ import { useSnapshotLoad } from "./useSnapshotLoad";
 
 type RepoName = { name: string };
 
+type HeldExplorer = {
+  repoName: string;
+  snapshotId: string;
+  snapshotLabel: string;
+};
+
 function ArchiveMark() {
   return (
     <span className="app-brand-mark" aria-hidden="true">
@@ -28,6 +34,7 @@ function App() {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [actionId, setActionId] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [heldExplorer, setHeldExplorer] = useState<HeldExplorer | null>(null);
   const actionBusy = actionId !== null;
   const {
     snapshots,
@@ -84,8 +91,33 @@ function App() {
     !shareStatus &&
     selectedRepo !== "" &&
     snapshots.length === 0;
+  const liveRepo =
+    selectedSnapshot && !snapError && !shareStatus ? selectedRepo : null;
+  const liveSnapId =
+    selectedSnapshot && !snapError && !shareStatus
+      ? selectedSnapshot.id
+      : null;
+  const liveSnapLabel =
+    selectedSnapshot && !snapError && !shareStatus
+      ? formatSnapshotLabel(selectedSnapshot)
+      : null;
+
+  useEffect(() => {
+    if (liveRepo && liveSnapId && liveSnapLabel) {
+      setHeldExplorer({
+        repoName: liveRepo,
+        snapshotId: liveSnapId,
+        snapshotLabel: liveSnapLabel,
+      });
+      return;
+    }
+    if (!loading) setHeldExplorer(null);
+  }, [liveRepo, liveSnapId, liveSnapLabel, loading]);
+
   const showExplorer =
-    selectedSnapshot !== null && !loading && !snapError && !shareStatus;
+    heldExplorer !== null && !snapError && !shareStatus;
+  const switching =
+    loading && liveSnapId === null && heldExplorer !== null;
   const zeroRepos = reposReady && !configError && repos.length === 0;
   const topDirs = selectedSnapshot
     ? formatSnapshotTopDirs(selectedSnapshot.paths)
@@ -160,15 +192,26 @@ function App() {
       )}
 
       <section className="explorer">
-        {showExplorer && selectedSnapshot ? (
-          <FileBrowser
-            repoName={selectedRepo}
-            snapshotId={selectedSnapshot.id}
-            snapshotLabel={formatSnapshotLabel(selectedSnapshot)}
-            actionBusy={actionBusy}
-            onActionId={setActionId}
-            onBusyLabel={setBusyLabel}
-          />
+        {showExplorer && heldExplorer ? (
+          <div
+            className={
+              switching ? "explorer-hold is-switching" : "explorer-hold"
+            }
+          >
+            {switching && (
+              <p className="app-loading explorer-switch-note" role="status">
+                Loading snapshots…
+              </p>
+            )}
+            <FileBrowser
+              repoName={heldExplorer.repoName}
+              snapshotId={heldExplorer.snapshotId}
+              snapshotLabel={heldExplorer.snapshotLabel}
+              actionBusy={actionBusy || switching}
+              onActionId={setActionId}
+              onBusyLabel={setBusyLabel}
+            />
+          </div>
         ) : (
           <div className="explorer-listing">
             <p className="app-loading">{emptyMsg}</p>

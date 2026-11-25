@@ -3,6 +3,7 @@ import type { FileSelection } from "./FileActions";
 import {
   clearListDirCacheForRepo,
   loadListDir,
+  peekListDir,
   resolveCarryPath,
   type CarryResult,
   type DirEntry,
@@ -54,9 +55,6 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     setCarryRequested(null);
     setCarryReady(false);
     setLoading(true);
-    setEntries([]);
-    setLoadedPath(null);
-    setLoadedIdentity(null);
     void resolveCarryPath(repoName, snapshotId, requested).then((r) =>
       applyCarry(gen, r),
     );
@@ -91,14 +89,22 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
   useEffect(() => {
     if (!carryReady) return;
     let discarded = false;
-    setLoading(true);
-    setLoadedPath(null);
-    setLoadedIdentity(null);
-    setLoadError(null);
-    setEntries([]);
-    setSelection(null);
     const requestedPath = path;
     const requestedIdentity = activeIdentity;
+    const hit = peekListDir(repoName, snapshotId, requestedPath);
+    if (hit) {
+      setEntries(hit);
+      setLoadedPath(requestedPath);
+      setLoadedIdentity(requestedIdentity);
+      setLoadError(null);
+      setSelection(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setSelection(null);
+    setLoadError(null);
     loadListDir(repoName, snapshotId, requestedPath)
       .then((rows) => {
         if (discarded) return;
@@ -127,21 +133,25 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     setCarryNote(null);
     setCarryError(null);
     setCarryRequested(null);
-    setLoading(true);
-    setLoadedPath(null);
-    setLoadedIdentity(null);
     setLoadError(null);
     if (next === pathRef.current) setListEpoch((n) => n + 1);
     else setPath(next);
   }
 
+  const listingCurrent =
+    loadedPath === path && loadedIdentity === activeIdentity;
   const listingReady =
     carryReady &&
     !loading &&
-    loadedPath === path &&
-    loadedIdentity === activeIdentity &&
+    listingCurrent &&
     !loadError &&
     !carryError;
+  const showStaleListing =
+    !listingReady &&
+    entries.length > 0 &&
+    !loadError &&
+    !carryError &&
+    (loading || !carryReady);
 
   return {
     path,
@@ -156,6 +166,7 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     loading,
     carryReady,
     listingReady,
+    showStaleListing,
     navigateTo,
     setSelection,
     // Join any in-flight list_dir (e.g. tree Retry already started); failures are

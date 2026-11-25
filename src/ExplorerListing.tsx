@@ -15,6 +15,7 @@ type Props = {
   entries: DirEntry[];
   selection: FileSelection | null;
   listingReady: boolean;
+  showStaleListing: boolean;
   loading: boolean;
   carryReady: boolean;
   carryNote: string | null;
@@ -36,6 +37,10 @@ export function ExplorerListing(p: Props) {
   const [success, setSuccess] = useState<string | null>(null);
   const crumbs = breadcrumbParts(p.path);
   const heading = folderHeading(p.path);
+  const pending = (p.loading || !p.carryReady) && !p.carryError;
+  const showBlankLoading = pending && !p.showStaleListing;
+  const showListing =
+    (p.listingReady || p.showStaleListing) && p.entries.length > 0;
 
   useEffect(() => {
     setSuccess(null);
@@ -89,7 +94,14 @@ export function ExplorerListing(p: Props) {
             onError={p.onActionError}
           />
         </div>
-        <div className="file-browser-body">
+        <div
+          className={
+            p.showStaleListing
+              ? "file-browser-body is-stale"
+              : "file-browser-body"
+          }
+          aria-busy={pending || undefined}
+        >
           {p.carryNote && <p className="app-loading">{p.carryNote}</p>}
           {p.carryError && (
             <div>
@@ -112,19 +124,22 @@ export function ExplorerListing(p: Props) {
           )}
           {success && <p className="app-success">{success}</p>}
           {p.actionError && <pre className="app-error">{p.actionError}</pre>}
-          {(p.loading || !p.carryReady) && !p.carryError && (
+          {showBlankLoading && (
+            <p className="app-loading">Loading directory…</p>
+          )}
+          {p.showStaleListing && (
             <p className="app-loading">Loading directory…</p>
           )}
           {p.listingReady && p.entries.length === 0 && (
             <p className="app-loading">This folder is empty.</p>
           )}
-          {p.listingReady && p.entries.length > 0 && (
+          {showListing && (
             <FileListing
               path={p.path}
               entries={p.entries}
-              selectedPath={p.selection?.path ?? null}
-              onSelect={onSelect}
-              onNavigate={p.onNavigate}
+              selectedPath={p.listingReady ? (p.selection?.path ?? null) : null}
+              onSelect={p.listingReady ? onSelect : () => {}}
+              onNavigate={p.listingReady ? p.onNavigate : () => {}}
             />
           )}
         </div>

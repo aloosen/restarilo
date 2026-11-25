@@ -85,6 +85,16 @@
   display: flex; flex-direction: column; min-height: 0; height: 100%; flex: 1;
 }
 .file-browser-body { flex: 1; min-height: 0; overflow: auto; }
+.file-browser-body.is-stale { opacity: 0.72; pointer-events: none; }
+.explorer-hold {
+  position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;
+}
+.explorer-hold.is-switching .explorer-shell { opacity: 0.72; pointer-events: none; }
+.explorer-switch-note {
+  position: absolute; z-index: 2; top: 12px; left: 50%; transform: translateX(-50%);
+  margin: 0; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); box-shadow: 0 4px 16px color-mix(in srgb, #18232a 16%, transparent);
+}
 .file-browser-heading {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 12px; margin: 8px 0 15px;

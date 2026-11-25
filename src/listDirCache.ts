@@ -61,6 +61,15 @@ export function invalidateListDir(
   inflight.delete(k);
 }
 
+/** Synchronous success-cache read; null on miss (does not join in-flight). */
+export function peekListDir(
+  repoName: string,
+  snapshotId: string,
+  path: string,
+): DirEntry[] | null {
+  return success.get(key(repoName, snapshotId, path)) ?? null;
+}
+
 export function loadListDir(
   repoName: string,
   snapshotId: string,

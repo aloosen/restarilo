@@ -117,6 +117,7 @@ export function ExplorerView({
           entries={b.entries}
           selection={b.selection}
           listingReady={b.listingReady}
+          showStaleListing={b.showStaleListing}
           loading={b.loading}
           carryReady={b.carryReady}
           carryNote={b.carryNote}
