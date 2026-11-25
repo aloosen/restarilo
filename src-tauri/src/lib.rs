@@ -1,18 +1,21 @@
 mod app_state;
 mod commands;
+mod commands_folder;
 mod config;
 mod folder_index;
+mod folder_index_emit;
 mod restic_actions;
 mod restic_bin;
 mod restic_cmd;
 mod restic_killable;
 mod restic_ls;
 mod restic_tree;
+mod scan_scheduler;
 mod ssh;
-mod tree_cache;
-mod tree_disk_cache;
 mod subtree_scan;
 mod subtree_scan_run;
+mod tree_cache;
+mod tree_disk_cache;
 mod tree_prefetch;
 mod tree_walk;
 
@@ -20,7 +23,9 @@ mod tree_walk;
 mod z1_acceptance_bench;
 
 use app_state::AppState;
+use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -36,14 +41,62 @@ pub fn run() {
                 .set_disk(Some(Arc::new(tree_disk_cache::TreeDiskCache::open(dir))));
         }
     }
+    {
+        let scan = state.scan.clone();
+        state.scan.set_runner(Some(Arc::new(move |job| {
+            let Ok(cfg) = commands::cached_config() else {
+                return subtree_scan::ScanStop::Cancelled;
+            };
+            let Ok(mut cmd) = restic_cmd::prepare_restic_command(cfg, &job.repo) else {
+                return subtree_scan::ScanStop::Cancelled;
+            };
+            cmd.args([
+                "ls",
+                &job.snapshot_id,
+                &job.root,
+                "--recursive",
+                "--json",
+            ]);
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::null());
+            cmd.stdin(Stdio::null());
+            let Ok(child) = cmd.spawn() else {
+                return subtree_scan::ScanStop::Cancelled;
+            };
+            let gen = job.generation;
+            let repo = job.repo.clone();
+            let snap = job.snapshot_id.clone();
+            let root = job.root.clone();
+            let scan_ref = scan.clone();
+            let repo_c = repo.clone();
+            let snap_c = snap.clone();
+            subtree_scan_run::run_scan_command(
+                child,
+                &root,
+                gen,
+                &repo,
+                &snap,
+                &job.index,
+                subtree_scan_run::SpawnOpts {
+                    wall_time: Duration::from_secs(15),
+                    node_budget: subtree_scan::MAX_DIR_NODES,
+                    cancel: None,
+                },
+                move |parent, dirs| {
+                    scan_ref.emit_dirs(gen, &repo_c, &snap_c, parent, dirs, false);
+                },
+            )
+        })));
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::restic_version,
             commands::list_repos,
-            commands::list_snapshots,
-            commands::list_dir,
+            commands_folder::list_snapshots,
+            commands_folder::list_dir,
+            commands_folder::list_folder_dirs,
             commands::begin_action,
             commands::cancel_action,
             commands::restore_path,

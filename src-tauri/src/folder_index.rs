@@ -1,8 +1,9 @@
 use crate::restic_ls::normalize_dir_path;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FolderChild {
     pub name: String,
     pub path: String,
