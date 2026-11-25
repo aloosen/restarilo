@@ -1,5 +1,7 @@
 use crate::config::Config;
-use crate::restic_killable::{ensure_slot, release_action, run_restic_killable};
+use crate::restic_killable::{
+    commit_finish, ensure_slot, release_action, run_restic_killable,
+};
 use std::path::{Path, PathBuf};
 
 fn parent_snapshot_path(path: &str) -> String {
@@ -126,6 +128,10 @@ pub fn dump_path(
             let _ = std::fs::remove_file(&temp);
             return Err(e);
         }
+        if let Err(e) = commit_finish(id) {
+            let _ = std::fs::remove_file(&temp);
+            return Err(e);
+        }
         if out.exists() {
             std::fs::remove_file(&out)
                 .map_err(|e| format!("failed to replace {}: {e}", out.display()))?;
@@ -166,6 +172,7 @@ pub fn open_path(
             &["dump", "--target", &temp_s, snapshot_id, path],
             id,
         )?;
+        commit_finish(id)?;
         open::that(&temp).map_err(|e| format!("failed to open {}: {e}", temp.display()))?;
         Ok(temp.to_string_lossy().into_owned())
     })

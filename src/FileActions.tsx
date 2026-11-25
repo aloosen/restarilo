@@ -79,7 +79,13 @@ export function FileActions({
     };
 
     async function attempt(overwrite: boolean) {
-      const id = await beginSession();
+      let id: string;
+      try {
+        id = await beginSession();
+      } catch (e: unknown) {
+        onError?.(String(e));
+        return;
+      }
       try {
         const payload =
           kind === "dump_path"
@@ -110,7 +116,13 @@ export function FileActions({
   async function onOpen() {
     if (!selection || selection.is_dir) return;
     onError?.(null);
-    const id = await beginSession();
+    let id: string;
+    try {
+      id = await beginSession();
+    } catch (e: unknown) {
+      onError?.(String(e));
+      return;
+    }
     try {
       await invokeAction(
         "open_path",
