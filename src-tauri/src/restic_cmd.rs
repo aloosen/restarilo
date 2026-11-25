@@ -6,9 +6,7 @@ use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotRow {
-    /// Full snapshot id for restic commands (`ls`, restore, …).
     pub id: String,
-    /// Short id for UI display only.
     pub short_id: String,
     pub time: String,
     pub hostname: String,
@@ -66,19 +64,17 @@ pub fn list_snapshots(cfg: &Config, repo_name: &str) -> Result<Vec<SnapshotRow>,
         .collect())
 }
 
-pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String, String> {
+pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Command, String> {
     let repo = find_repo(cfg, repo_name)?;
     let bin = restic_bin::resolve_restic(Some(cfg))?;
     let exe = exe_dir()?;
     let mode = repo.password_mode(&exe)?;
-
     let mut cmd = Command::new(&bin);
     cmd.env_remove("RESTIC_PASSWORD");
     cmd.env_remove("RESTIC_PASSWORD_FILE");
     cmd.env_remove("RESTIC_PASSWORD_COMMAND");
     cmd.env_remove("RESTIC_REPOSITORY_FILE");
     cmd.env("RESTIC_REPOSITORY", &repo.path);
-
     match &mode {
         PasswordMode::File(path) => {
             cmd.env("RESTIC_PASSWORD_FILE", path);
@@ -90,18 +86,20 @@ pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String
             cmd.arg("--insecure-no-password");
         }
     }
-
     if let Some(sftp_args) = ssh::sftp_args_for_repo(repo)? {
         cmd.arg("-o");
         cmd.arg(format!("sftp.args={sftp_args}"));
     }
+    Ok(cmd)
+}
 
+pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String, String> {
+    let mut cmd = prepare_restic_command(cfg, repo_name)?;
     cmd.args(args);
     cmd.stdin(Stdio::null());
     let output = cmd
         .output()
         .map_err(|e| format!("failed to run restic: {e}"))?;
-
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         let out = String::from_utf8_lossy(&output.stdout);
@@ -116,7 +114,6 @@ pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String
             msg
         });
     }
-
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -172,10 +169,7 @@ mod tests {
                 },
                 RepoConfig {
                     name: "sftp".into(),
-                    path: format!(
-                        "sftp:{user}@127.0.0.1:{}",
-                        sftp_path.to_string_lossy()
-                    ),
+                    path: format!("sftp:{user}@127.0.0.1:{}", sftp_path.to_string_lossy()),
                     password_file: None,
                     password_command: None,
                     insecure_no_password: true,
@@ -185,7 +179,9 @@ mod tests {
         };
         let local_rows = list_snapshots(&cfg, "local").expect("local snapshots");
         assert!(
-            local_rows.iter().any(|r| r.id == expected.local || r.id.starts_with(&expected.local)),
+            local_rows
+                .iter()
+                .any(|r| r.id == expected.local || r.id.starts_with(&expected.local)),
             "expected local snapshot {}, got {local_rows:?}",
             expected.local
         );
