@@ -93,14 +93,21 @@ export function useSnapshotLoad(selectedRepo: string) {
     setSnapError(null);
     setShareStatus(null);
     setLoading(true);
-    void loadForRepo(selectedRepo, token, tokenRef).then((r) => {
-      if (cancelled || token !== tokenRef.current) return;
-      setSnapshots(r.snapshots);
-      setSelectedSnapshot(r.selected);
-      setSnapError(r.snapError);
-      setShareStatus(r.shareStatus);
-      setLoading(false);
-    });
+    void loadForRepo(selectedRepo, token, tokenRef)
+      .then((r) => {
+        if (cancelled || token !== tokenRef.current) return;
+        setSnapshots(r.snapshots);
+        setSelectedSnapshot(r.selected);
+        setSnapError(r.snapError);
+        setShareStatus(r.shareStatus);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled || token !== tokenRef.current) return;
+        setSnapError(String(e));
+        setShareStatus(null);
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
       clearListDirCacheForRepo(selectedRepo);
