@@ -1,199 +1,86 @@
 .explorer-chrome {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-  flex: 0 0 auto;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 18px; flex: 0 0 auto; padding: 12px 22px;
+  border-bottom: 1px solid var(--border); min-height: 66px;
 }
-
-.app-snapshot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
+.app-brand { display: flex; align-items: center; gap: 8px; }
+.app-brand-mark {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: 9px; background: var(--accent); color: var(--accent-ink);
 }
-
+.app-brand-name { font-size: 17px; font-weight: 650; letter-spacing: -0.035em; }
+.app-chrome-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.app-snapshot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
 .app-snapshot select,
 .app-repo select {
-  margin-left: 4px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
+  margin-left: 4px; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
   max-width: min(100%, 42rem);
 }
-
 .explorer {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  overflow: hidden;
+  flex: 1; min-height: 0; display: flex; flex-direction: row;
+  align-items: stretch; overflow: hidden;
 }
-
 .explorer-tree,
 .explorer-listing {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
+  min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column;
 }
-
 .explorer-tree {
-  flex: 0 0 auto;
+  flex: 0 0 auto; background: var(--side); border-right: 1px solid var(--border); padding: 19px 11px;
 }
-
 .explorer-split {
-  flex: 0 0 6px;
-  margin: 0 3px;
-  border-radius: 3px;
-  background: var(--border);
-  cursor: col-resize;
-  touch-action: none;
+  flex: 0 0 6px; background: var(--border); cursor: col-resize; touch-action: none;
 }
-
 .explorer-split:hover,
 .explorer-split:focus-visible {
-  background: color-mix(in srgb, var(--fg) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
-
-.explorer-split:focus-visible {
-  outline: 2px solid var(--fg);
-  outline-offset: 1px;
-}
-
+.explorer-split:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .explorer-listing {
-  flex: 1 1 auto;
-  overflow: hidden;
+  flex: 1 1 auto; overflow: hidden; padding: 18px 22px 12px; background: var(--bg);
 }
-
 .file-browser {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  flex: 1;
+  display: flex; flex-direction: column; min-height: 0; height: 100%; flex: 1;
 }
-
-.file-browser-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
+.file-browser-body { flex: 1; min-height: 0; overflow: auto; }
 .file-browser-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-  min-width: 0;
-  flex: 0 0 auto;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;
 }
-
 .file-browser-toolbar button,
 .file-actions button,
 .app-action-bar button {
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-  flex: 0 0 auto;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 10px; cursor: pointer;
 }
-
 .file-browser-toolbar button:disabled,
-.file-actions button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.file-browser-path {
-  color: var(--muted);
-  font-size: 13px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  flex: 1 1 auto;
-}
-
-.file-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
+.file-actions button:disabled { opacity: 0.52; cursor: default; }
+.file-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .file-actions-busy,
-.explorer-chrome-paths {
-  color: var(--muted);
-  font-size: 13px;
-}
-
+.explorer-chrome-paths { color: var(--muted); font-size: 13px; }
 .app-action-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px; padding: 8px 22px;
+  border-bottom: 1px solid var(--border); background: var(--side);
 }
-
 .folder-tree,
-.folder-tree ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
+.folder-tree ul { list-style: none; margin: 0; padding: 0; }
 .folder-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+  border-radius: 7px; padding: 4px 6px;
 }
-
 .folder-tree-twist {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0 2px;
-  flex: 0 0 auto;
+  appearance: none; border: none; background: transparent; color: var(--muted);
+  cursor: pointer; padding: 0 2px;
 }
-
 .folder-tree li.is-active > .folder-tree-row {
-  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+  background: var(--selected); color: var(--accent); font-weight: 650;
 }
-
-.file-breadcrumb {
-  margin-bottom: 8px;
-  flex: 0 0 auto;
-}
-
-.file-breadcrumb-sep {
-  color: var(--muted);
-}
-
+.file-breadcrumb { margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.file-breadcrumb-btn { color: var(--accent); }
 @media (max-width: 900px) {
-  .explorer {
-    flex-direction: column;
-  }
-
+  .explorer { flex-direction: column; }
   .explorer-tree {
-    width: 100% !important;
-    flex-basis: auto !important;
-    max-height: 30%;
+    width: 100% !important; flex-basis: auto !important; max-height: 30%;
+    border-right: 0; border-bottom: 1px solid var(--border);
   }
-
-  .explorer-split {
-    display: none;
-  }
+  .explorer-split { display: none; }
 }

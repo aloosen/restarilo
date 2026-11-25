@@ -98,32 +98,42 @@ function App() {
 
   return (
     <main className="app">
-      <h1>restarilo</h1>
-
-      <div className="explorer-chrome">
-        <label className="app-repo">
-          Repo{" "}
-          <select
-            value={selectedRepo}
-            onChange={(e) => onSelectRepo(e.target.value)}
-            disabled={repos.length === 0 || actionBusy}
-          >
-            {repos.map((r) => (
-              <option key={r.name} value={r.name}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <SnapshotList
-          snapshots={snapshots}
-          selectedId={selectedSnapshot?.id ?? null}
-          loading={loading}
-          disabled={actionBusy}
-          error={error}
-          onSelectId={onSelectSnapshotId}
-        />
-      </div>
+      <header className="explorer-chrome">
+        <div className="app-brand">
+          <span className="app-brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M2 10h20" />
+              <path d="M12 4v16" />
+            </svg>
+          </span>
+          <span className="app-brand-name">restarilo</span>
+        </div>
+        <div className="app-chrome-controls">
+          <label className="app-repo">
+            Repo{" "}
+            <select
+              value={selectedRepo}
+              onChange={(e) => onSelectRepo(e.target.value)}
+              disabled={repos.length === 0 || actionBusy}
+            >
+              {repos.map((r) => (
+                <option key={r.name} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <SnapshotList
+            snapshots={snapshots}
+            selectedId={selectedSnapshot?.id ?? null}
+            loading={loading}
+            disabled={actionBusy}
+            error={error}
+            onSelectId={onSelectSnapshotId}
+          />
+        </div>
+      </header>
 
       {actionBusy && (
         <div className="app-action-bar">
