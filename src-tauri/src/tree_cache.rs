@@ -1,0 +1,192 @@
+use crate::restic_tree::TreeChild;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Condvar, Mutex};
+
+const MEMORY_BUDGET: usize = 32 * 1024 * 1024;
+
+#[derive(Clone)]
+pub struct CachedListing {
+    pub children: Arc<Vec<TreeChild>>,
+    pub size_est: usize,
+}
+
+pub fn listing_size_est(children: &[TreeChild]) -> usize {
+    children.iter().map(|c| {
+        c.name.len() + 1 + usize::from(c.size.is_some()) * 8 + usize::from(c.subtree.is_some()) * 64
+    }).sum()
+}
+
+type FetchFn = Arc<dyn Fn(&str, &str) -> Result<Vec<TreeChild>, String> + Send + Sync>;
+type Flight = Arc<(Mutex<FlightState>, Condvar)>;
+
+struct FlightState {
+    done: bool,
+    result: Option<Result<CachedListing, String>>,
+}
+
+pub struct TreeCache {
+    inner: Mutex<Inner>,
+}
+
+struct Inner {
+    generation: u64,
+    snapshot_roots: HashMap<String, String>,
+    entries: HashMap<String, CachedListing>,
+    lru: VecDeque<String>,
+    bytes: usize,
+    in_flight: HashMap<String, Flight>,
+    fetch: Option<FetchFn>,
+}
+
+impl TreeCache {
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(Inner {
+                generation: 0,
+                snapshot_roots: HashMap::new(),
+                entries: HashMap::new(),
+                lru: VecDeque::new(),
+                bytes: 0,
+                in_flight: HashMap::new(),
+                fetch: None,
+            }),
+        }
+    }
+
+    pub fn set_fetcher<F>(&self, f: F)
+    where
+        F: Fn(&str, &str) -> Result<Vec<TreeChild>, String> + Send + Sync + 'static,
+    {
+        self.inner.lock().unwrap().fetch = Some(Arc::new(f));
+    }
+
+    pub fn begin_list_snapshots(&self, _repo: &str) -> u64 {
+        let mut g = self.inner.lock().unwrap();
+        g.generation = g.generation.wrapping_add(1);
+        g.snapshot_roots.clear();
+        g.entries.clear();
+        g.lru.clear();
+        g.bytes = 0;
+        g.in_flight.clear();
+        g.generation
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.inner.lock().unwrap().generation
+    }
+
+    pub fn remember_snapshots(&self, generation: u64, roots: HashMap<String, String>) -> bool {
+        let mut g = self.inner.lock().unwrap();
+        if g.generation != generation {
+            return false;
+        }
+        g.snapshot_roots = roots;
+        true
+    }
+
+    pub fn root_tree(&self, snapshot_id: &str) -> Option<String> {
+        self.inner.lock().unwrap().snapshot_roots.get(snapshot_id).cloned()
+    }
+
+    fn touch_lru(g: &mut Inner, tree_id: &str) {
+        if let Some(pos) = g.lru.iter().position(|id| id == tree_id) {
+            g.lru.remove(pos);
+        }
+        g.lru.push_back(tree_id.to_string());
+    }
+
+    pub fn get_cached(&self, tree_id: &str) -> Option<CachedListing> {
+        let mut g = self.inner.lock().unwrap();
+        let hit = g.entries.get(tree_id).cloned()?;
+        Self::touch_lru(&mut g, tree_id);
+        Some(hit)
+    }
+
+    pub fn insert_listing(
+        &self,
+        generation: u64,
+        tree_id: &str,
+        children: Vec<TreeChild>,
+    ) -> Result<CachedListing, String> {
+        let mut g = self.inner.lock().unwrap();
+        if g.generation != generation {
+            return Err("CANCELLED: stale cache generation".into());
+        }
+        let size_est = listing_size_est(&children);
+        let listing = CachedListing { children: Arc::new(children), size_est };
+        if size_est > MEMORY_BUDGET {
+            return Ok(listing);
+        }
+        while g.bytes + size_est > MEMORY_BUDGET {
+            let Some(old) = g.lru.pop_front() else { break };
+            if let Some(removed) = g.entries.remove(&old) {
+                g.bytes = g.bytes.saturating_sub(removed.size_est);
+            }
+        }
+        if let Some(prev) = g.entries.insert(tree_id.to_string(), listing.clone()) {
+            g.bytes = g.bytes.saturating_sub(prev.size_est);
+        }
+        Self::touch_lru(&mut g, tree_id);
+        g.bytes += size_est;
+        Ok(listing)
+    }
+
+    pub fn get_or_fetch(
+        &self,
+        generation: u64,
+        repo: &str,
+        tree_id: &str,
+    ) -> Result<CachedListing, String> {
+        if let Some(hit) = self.get_cached(tree_id) {
+            return Ok(hit);
+        }
+        let (slot, is_leader) = {
+            let mut g = self.inner.lock().unwrap();
+            if g.generation != generation {
+                return Err("CANCELLED: stale cache generation".into());
+            }
+            if let Some(hit) = g.entries.get(tree_id).cloned() {
+                return Ok(hit);
+            }
+            if let Some(existing) = g.in_flight.get(tree_id).cloned() {
+                (existing, false)
+            } else {
+                let slot = Arc::new((
+                    Mutex::new(FlightState { done: false, result: None }),
+                    Condvar::new(),
+                ));
+                g.in_flight.insert(tree_id.to_string(), slot.clone());
+                (slot, true)
+            }
+        };
+        if !is_leader {
+            let (lock, cvar) = &*slot;
+            let mut guard = lock.lock().unwrap();
+            while !guard.done {
+                guard = cvar.wait(guard).unwrap();
+            }
+            return guard.result.clone().unwrap_or_else(|| {
+                Err("CANCELLED: in-flight fetch missing result".into())
+            });
+        }
+        let fetch = self.inner.lock().unwrap().fetch.clone();
+        let outcome = match fetch {
+            Some(f) => match f(repo, tree_id) {
+                Ok(children) => self.insert_listing(generation, tree_id, children),
+                Err(e) => Err(e),
+            },
+            None => Err("tree fetch not configured".into()),
+        };
+        self.inner.lock().unwrap().in_flight.remove(tree_id);
+        let (lock, cvar) = &*slot;
+        let mut guard = lock.lock().unwrap();
+        guard.done = true;
+        guard.result = Some(outcome.clone());
+        cvar.notify_all();
+        outcome
+    }
+}
+
+#[cfg(test)]
+#[path = "tree_cache_tests.rs"]
+mod tests;

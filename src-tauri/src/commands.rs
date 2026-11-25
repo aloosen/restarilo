@@ -1,0 +1,190 @@
+use crate::app_state::AppState;
+use crate::config::Config;
+use crate::restic_cmd::SnapshotRow;
+use crate::restic_ls::DirEntry;
+use crate::{restic_actions, restic_bin, restic_cmd, restic_killable, restic_ls};
+use serde::Serialize;
+use std::collections::HashMap;
+use std::process::Command;
+use std::sync::OnceLock;
+use tauri::State;
+
+static CONFIG: OnceLock<Result<Config, String>> = OnceLock::new();
+
+pub(crate) fn cached_config() -> Result<&'static Config, String> {
+    match CONFIG.get_or_init(crate::config::load_config) {
+        Ok(cfg) => Ok(cfg),
+        Err(e) => Err(e.clone()),
+    }
+}
+
+#[derive(Serialize)]
+pub struct RepoName {
+    name: String,
+}
+
+#[tauri::command]
+pub fn list_repos() -> Result<Vec<RepoName>, String> {
+    let cfg = cached_config()?;
+    Ok(cfg
+        .repos
+        .iter()
+        .map(|r| RepoName {
+            name: r.name.clone(),
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn list_snapshots(
+    state: State<'_, AppState>,
+    repo_name: String,
+) -> Result<Vec<SnapshotRow>, String> {
+    let cache = state.tree_cache.clone();
+    let generation = cache.begin_list_snapshots(&repo_name);
+    let rows = tauri::async_runtime::spawn_blocking({
+        let repo_name = repo_name.clone();
+        move || {
+            let cfg = cached_config()?;
+            restic_cmd::list_snapshots(cfg, &repo_name)
+        }
+    })
+    .await
+    .map_err(|e| format!("list_snapshots task failed: {e}"))??;
+    if cache.generation() != generation {
+        return Ok(rows);
+    }
+    let roots: HashMap<_, _> = rows
+        .iter()
+        .map(|s| (s.id.clone(), s.tree.clone()))
+        .collect();
+    let _ = cache.remember_snapshots(generation, roots);
+    Ok(rows)
+}
+
+#[tauri::command]
+pub async fn list_dir(
+    state: State<'_, AppState>,
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+) -> Result<Vec<DirEntry>, String> {
+    let cache = state.tree_cache.clone();
+    let generation = cache.generation();
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        if cache.generation() != generation {
+            return Err("CANCELLED: stale cache generation".into());
+        }
+        restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)
+    })
+    .await
+    .map_err(|e| format!("list_dir task failed: {e}"))?
+}
+
+#[tauri::command]
+pub fn restic_version() -> Result<String, String> {
+    let cfg = cached_config().ok();
+    let bin = restic_bin::resolve_restic(cfg)?;
+    let output = Command::new(&bin)
+        .arg("version")
+        .output()
+        .map_err(|e| format!("failed to run restic: {e}"))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[tauri::command]
+pub fn begin_action(action_id: String) -> Result<(), String> {
+    restic_killable::begin_action(action_id)
+}
+
+#[tauri::command]
+pub fn cancel_action(action_id: String) -> Result<(), String> {
+    restic_killable::cancel_action(action_id)
+}
+
+#[tauri::command]
+pub async fn restore_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    target_dir: String,
+    overwrite: bool,
+    action_id: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::restore_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            &target_dir,
+            overwrite,
+            action_id,
+        )
+    })
+    .await
+    .map_err(|e| format!("restore_path task failed: {e}"))?
+}
+
+#[tauri::command]
+pub async fn dump_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    is_dir: bool,
+    target_dir: String,
+    overwrite: bool,
+    action_id: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::dump_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            is_dir,
+            &target_dir,
+            overwrite,
+            action_id,
+        )
+    })
+    .await
+    .map_err(|e| format!("dump_path task failed: {e}"))?
+}
+
+#[tauri::command]
+pub async fn open_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    is_dir: bool,
+    action_id: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::open_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            is_dir,
+            action_id,
+        )
+    })
+    .await
+    .map_err(|e| format!("open_path task failed: {e}"))?
+}

@@ -4,7 +4,7 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
-Select a snapshot to browse its file tree (folders and files via `restic ls`). From the file browser you can restore or dump a selection, or open a file.
+Select a snapshot to browse its file tree (folders and files from restic tree objects via `cat blob`, keyed by tree id and reused across snapshots that share subtrees). From the file browser you can restore or dump a selection, or open a file.
 
 ## Configuration
 

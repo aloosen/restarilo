@@ -20,7 +20,7 @@ fn escape_filter_literal(name: &str) -> String {
     for c in name.chars() {
         match c {
             '[' => out.push_str("[[]"),
-            '*' | '?' => {
+            '*' | '?' | '\\' => {
                 out.push('\\');
                 out.push(c);
             }
@@ -191,5 +191,6 @@ mod tests {
     fn escape_glob_metacharacters() {
         assert_eq!(escape_filter_literal("a*b?c"), r"a\*b\?c");
         assert_eq!(escape_filter_literal("plain.txt"), "plain.txt");
+        assert_eq!(escape_filter_literal(r"a\b"), r"a\\b");
     }
 }

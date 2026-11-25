@@ -1,7 +1,6 @@
 use crate::config::{exe_dir, Config, PasswordMode, RepoConfig};
 use crate::restic_bin;
 use crate::ssh;
-use serde::Deserialize;
 use std::process::{Command, Stdio};
 
 #[path = "restic_snapshots.rs"]
@@ -72,6 +71,7 @@ pub fn run_restic(cfg: &Config, repo_name: &str, args: &[&str]) -> Result<String
 mod tests {
     use super::*;
     use crate::config::{ResticSection, RepoConfig};
+    use serde::Deserialize;
     use std::path::Path;
 
     #[test]
