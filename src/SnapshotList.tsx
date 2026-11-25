@@ -40,14 +40,17 @@ export function SnapshotList({
           const label = s.short_id || s.id.slice(0, 8);
           const selected = selectedId === s.id;
           return (
-            <tr key={s.id} className={selected ? "is-selected" : undefined}>
+            <tr
+              key={s.id}
+              className={selected ? "is-selectable is-selected" : "is-selectable"}
+              onClick={() => onSelectSnapshot(s)}
+            >
               <td className="mono">
                 <button
                   type="button"
                   className="linkish"
                   data-snapshot-id={s.id}
                   aria-current={selected ? "true" : undefined}
-                  onClick={() => onSelectSnapshot(s)}
                 >
                   {label}
                 </button>

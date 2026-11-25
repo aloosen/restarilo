@@ -170,7 +170,16 @@ body,
   font-size: 13px;
 }
 
-.app-table tr.is-selected td {
+.app-table tr.is-selectable {
+  cursor: pointer;
+}
+
+.app-table tr.is-selectable:hover td {
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+}
+
+.app-table tr.is-selected td,
+.app-table tr.is-selected:hover td {
   background: color-mix(in srgb, var(--fg) 12%, var(--bg));
 }
 

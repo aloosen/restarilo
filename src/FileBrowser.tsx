@@ -99,9 +99,9 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
   }
 
   function onEntryKeyDown(e: KeyboardEvent, entry: DirEntry) {
-    if (e.key === "Enter" && entry.is_dir) {
+    if (e.key === " " && entry.is_dir) {
       e.preventDefault();
-      navigateTo(entry.path);
+      selectEntry(entry);
     }
   }
 
@@ -144,15 +144,20 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
               {entries.map((e) => (
                 <tr
                   key={e.path}
-                  className={selection?.path === e.path ? "is-selected" : undefined}
+                  className={selection?.path === e.path ? "is-selectable is-selected" : "is-selectable"}
+                  onClick={() => selectEntry(e)}
+                  onDoubleClick={() => e.is_dir && navigateTo(e.path)}
                 >
                   <td className="mono">
                     <button
                       type="button"
                       className="linkish"
                       aria-current={selection?.path === e.path ? "true" : undefined}
-                      onClick={() => selectEntry(e)}
-                      onDoubleClick={() => e.is_dir && navigateTo(e.path)}
+                      onClick={(event) => {
+                        if (!e.is_dir) return;
+                        event.stopPropagation();
+                        navigateTo(e.path);
+                      }}
                       onKeyDown={(ev) => onEntryKeyDown(ev, e)}
                     >
                       {e.name}
