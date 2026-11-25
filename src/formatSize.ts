@@ -23,3 +23,16 @@ export function formatMtime(raw: string | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
+
+/** Readable snapshot select / action label (date+time + hostname; short id detail). */
+export function formatSnapshotLabel(s: {
+  id: string;
+  short_id: string;
+  time: string;
+  hostname: string;
+}): string {
+  const when = formatMtime(s.time) || s.time;
+  const short = s.short_id || s.id.slice(0, 8);
+  const host = s.hostname?.trim();
+  return host ? `${when} · ${host} · ${short}` : `${when} · ${short}`;
+}

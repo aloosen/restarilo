@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { formatMtime, formatSize } from "./formatSize";
 import type { DirEntry } from "./listDirCache";
+import { FileIcon, FolderIcon } from "./listingIcons";
 
 type Props = {
   path: string;
@@ -19,18 +20,6 @@ function sortEntries(rows: DirEntry[]): DirEntry[] {
   });
 }
 
-function breadcrumbParts(path: string): { label: string; target: string }[] {
-  const parts = [{ label: "/", target: "/" }];
-  if (path === "/" || path === "") return parts;
-  const segs = path.split("/").filter(Boolean);
-  let acc = "";
-  for (const seg of segs) {
-    acc += `/${seg}`;
-    parts.push({ label: seg, target: acc });
-  }
-  return parts;
-}
-
 export function FileListing({
   path,
   entries,
@@ -40,7 +29,6 @@ export function FileListing({
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const sorted = sortEntries(entries);
-  const crumbs = breadcrumbParts(path);
 
   useEffect(() => {
     const first = listRef.current?.querySelector<HTMLButtonElement>(
@@ -87,28 +75,12 @@ export function FileListing({
 
   return (
     <div className="file-listing" ref={listRef}>
-      <nav className="file-breadcrumb" aria-label="Path">
-        {crumbs.map((c, i) => (
-          <span key={c.target}>
-            {i > 0 && <span className="file-breadcrumb-sep"> / </span>}
-            <button
-              type="button"
-              className="linkish file-breadcrumb-btn"
-              disabled={c.target === path}
-              onClick={() => onNavigate(c.target)}
-            >
-              {c.label}
-            </button>
-          </span>
-        ))}
-      </nav>
       <table className="app-table">
         <thead>
           <tr>
             <th>Name</th>
-            <th>Type</th>
-            <th>Size</th>
-            <th>Modified</th>
+            <th className="col-size">Size</th>
+            <th className="col-mtime">Modified</th>
           </tr>
         </thead>
         <tbody>
@@ -117,33 +89,39 @@ export function FileListing({
             return (
               <tr
                 key={e.path}
-                className={selected ? "is-selectable is-selected" : "is-selectable"}
+                className={
+                  selected ? "is-selectable is-selected" : "is-selectable"
+                }
                 onClick={() => onSelect(e)}
                 onDoubleClick={() => e.is_dir && onNavigate(e.path)}
               >
-                <td className="mono">
+                <td>
                   <button
                     type="button"
                     className="linkish file-listing-row"
                     aria-current={selected ? "true" : undefined}
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (e.is_dir) onNavigate(e.path);
-                      else onSelect(e);
+                      onSelect(e);
                     }}
                     onDoubleClick={(event) => {
                       event.stopPropagation();
                       if (e.is_dir) onNavigate(e.path);
-                      else onSelect(e);
                     }}
                     onKeyDown={(ev) => onRowKey(ev, e, index)}
                   >
-                    {e.is_dir ? `${e.name}/` : e.name}
+                    {e.is_dir ? (
+                      <FolderIcon className="listing-icon listing-icon-folder" />
+                    ) : (
+                      <FileIcon className="listing-icon" />
+                    )}
+                    <span className="listing-name">{e.name}</span>
                   </button>
                 </td>
-                <td>{e.entry_type || (e.is_dir ? "dir" : "file")}</td>
-                <td className="mono">{formatSize(e.size)}</td>
-                <td className="mono">{formatMtime(e.mtime)}</td>
+                <td className="col-size mono">
+                  {e.is_dir ? "–" : formatSize(e.size) || "–"}
+                </td>
+                <td className="col-mtime mono">{formatMtime(e.mtime) || "–"}</td>
               </tr>
             );
           })}
@@ -151,4 +129,24 @@ export function FileListing({
       </table>
     </div>
   );
+}
+
+export function breadcrumbParts(
+  path: string,
+): { label: string; target: string }[] {
+  const parts = [{ label: "All files", target: "/" }];
+  if (path === "/" || path === "") return parts;
+  const segs = path.split("/").filter(Boolean);
+  let acc = "";
+  for (const seg of segs) {
+    acc += `/${seg}`;
+    parts.push({ label: seg, target: acc });
+  }
+  return parts;
+}
+
+export function folderHeading(path: string): string {
+  if (path === "/" || path === "") return "All files";
+  const segs = path.split("/").filter(Boolean);
+  return segs[segs.length - 1] ?? path;
 }

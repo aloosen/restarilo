@@ -1,3 +1,5 @@
+import { formatSnapshotLabel } from "./formatSize";
+
 export type SnapshotRow = {
   id: string;
   short_id: string;
@@ -31,11 +33,6 @@ export function sortSnapshotsNewestFirst(rows: SnapshotRow[]): SnapshotRow[] {
   });
 }
 
-function optionLabel(s: SnapshotRow): string {
-  const short = s.short_id || s.id.slice(0, 8);
-  return `${s.time} · ${s.hostname} · ${short}`;
-}
-
 export function SnapshotList({
   snapshots,
   selectedId,
@@ -46,6 +43,7 @@ export function SnapshotList({
 }: Props) {
   const sorted = sortSnapshotsNewestFirst(snapshots);
   const empty = sorted.length === 0;
+  const selected = sorted.find((s) => s.id === selectedId);
 
   return (
     <div className="app-snapshot">
@@ -54,12 +52,13 @@ export function SnapshotList({
         <select
           value={selectedId ?? ""}
           disabled={disabled || loading || empty}
+          title={selected ? selected.id : undefined}
           onChange={(e) => onSelectId(e.target.value)}
         >
           {empty && <option value="">No snapshots</option>}
           {sorted.map((s) => (
-            <option key={s.id} value={s.id}>
-              {optionLabel(s)}
+            <option key={s.id} value={s.id} title={s.id}>
+              {formatSnapshotLabel(s)}
             </option>
           ))}
         </select>

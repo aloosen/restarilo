@@ -1,5 +1,9 @@
 import { FileActions, type FileSelection } from "./FileActions";
-import { FileListing } from "./FileListing";
+import {
+  FileListing,
+  breadcrumbParts,
+  folderHeading,
+} from "./FileListing";
 import type { DirEntry } from "./listDirCache";
 
 type Props = {
@@ -27,14 +31,35 @@ type Props = {
 };
 
 export function ExplorerListing(p: Props) {
+  const crumbs = breadcrumbParts(p.path);
+  const heading = folderHeading(p.path);
+  const statusSelection = p.selection
+    ? `${p.selection.name} selected`
+    : "No selection";
+
   return (
     <div className="explorer-listing">
       <section className="file-browser">
-        <div className="file-browser-toolbar explorer-chrome-paths">
-          <span className="mono">
-            {p.repoName} · {p.snapshotLabel} · {p.path}
-            {p.selection ? ` · sel ${p.selection.path}` : ""}
-          </span>
+        <nav className="file-breadcrumb" aria-label="Path">
+          {crumbs.map((c, i) => (
+            <span key={c.target}>
+              {i > 0 && <span className="file-breadcrumb-sep"> / </span>}
+              {c.target === p.path ? (
+                <span aria-current="page">{c.label}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="linkish file-breadcrumb-btn"
+                  onClick={() => p.onNavigate(c.target)}
+                >
+                  {c.label}
+                </button>
+              )}
+            </span>
+          ))}
+        </nav>
+        <div className="file-browser-heading">
+          <h2 className="file-folder-title">{heading}</h2>
           <FileActions
             repoName={p.repoName}
             snapshotId={p.snapshotId}
@@ -70,7 +95,10 @@ export function ExplorerListing(p: Props) {
           {(p.loading || !p.carryReady) && !p.carryError && (
             <p className="app-loading">Loading directory…</p>
           )}
-          {p.listingReady && (
+          {p.listingReady && p.entries.length === 0 && (
+            <p className="app-loading">This folder is empty.</p>
+          )}
+          {p.listingReady && p.entries.length > 0 && (
             <FileListing
               path={p.path}
               entries={p.entries}
@@ -80,6 +108,11 @@ export function ExplorerListing(p: Props) {
             />
           )}
         </div>
+        {p.listingReady && (
+          <footer className="file-status-bar" aria-live="polite">
+            {p.entries.length} entries · {statusSelection}
+          </footer>
+        )}
       </section>
     </div>
   );
