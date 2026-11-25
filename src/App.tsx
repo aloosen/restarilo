@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
+import { clearListDirCacheForRepo } from "./listDirCache";
 import {
   SnapshotList,
   sortSnapshotsNewestFirst,
@@ -56,6 +57,7 @@ function App() {
       });
     return () => {
       discarded = true;
+      clearListDirCacheForRepo(selectedRepo);
     };
   }, [selectedRepo]);
 
@@ -76,12 +78,23 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [actionBusy, onCancel]);
 
+  function onSelectRepo(name: string) {
+    if (name === selectedRepo) return;
+    clearListDirCacheForRepo(selectedRepo);
+    setSelectedSnapshot(null);
+    setSnapshots([]);
+    setError(null);
+    setLoading(true);
+    setSelectedRepo(name);
+  }
+
   function onSelectSnapshotId(id: string) {
     const row = snapshots.find((s) => s.id === id) ?? null;
     setSelectedSnapshot(row);
   }
 
   const emptyExplorer = !loading && snapshots.length === 0;
+  const showExplorer = selectedSnapshot !== null && !loading;
 
   return (
     <main className="app">
@@ -92,7 +105,7 @@ function App() {
           Repo{" "}
           <select
             value={selectedRepo}
-            onChange={(e) => setSelectedRepo(e.target.value)}
+            onChange={(e) => onSelectRepo(e.target.value)}
             disabled={repos.length === 0 || actionBusy}
           >
             {repos.map((r) => (
@@ -122,9 +135,8 @@ function App() {
       )}
 
       <section className="explorer">
-        {selectedSnapshot ? (
+        {showExplorer && selectedSnapshot ? (
           <FileBrowser
-            key={selectedRepo}
             repoName={selectedRepo}
             snapshotId={selectedSnapshot.id}
             snapshotLabel={

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { loadListDir, type DirEntry } from "./listDirCache";
+import { ancestorPaths, flattenVisible, type BranchState } from "./folderTreeNav";
+import { FolderTreeNode } from "./FolderTreeNode";
+import { loadListDir } from "./listDirCache";
 
 type Props = {
   repoName: string;
@@ -7,23 +9,6 @@ type Props = {
   currentPath: string;
   onNavigate: (path: string) => void;
 };
-
-type BranchState = {
-  loading: boolean;
-  error: string | null;
-  dirs: DirEntry[];
-};
-
-function ancestorPaths(path: string): string[] {
-  if (path === "/" || path === "") return ["/"];
-  const out = ["/"];
-  let acc = "";
-  for (const seg of path.split("/").filter(Boolean)) {
-    acc += `/${seg}`;
-    out.push(acc);
-  }
-  return out;
-}
 
 export function FolderTree({
   repoName,
@@ -36,6 +21,7 @@ export function FolderTree({
   const [branches, setBranches] = useState<Record<string, BranchState>>({});
   const branchGen = useRef<Record<string, number>>({});
   const identityRef = useRef(identity);
+  const treeRef = useRef<HTMLUListElement>(null);
   identityRef.current = identity;
 
   useEffect(() => {
@@ -44,45 +30,46 @@ export function FolderTree({
     branchGen.current = {};
   }, [repoName, snapshotId]);
 
-  const loadBranch = useCallback((branchPath: string) => {
-    const gen = (branchGen.current[branchPath] ?? 0) + 1;
-    branchGen.current[branchPath] = gen;
-    const startedIdentity = identityRef.current;
-    const repo = repoName;
-    const snap = snapshotId;
-    setBranches((prev) => ({
-      ...prev,
-      [branchPath]: {
-        loading: true,
-        error: null,
-        dirs: prev[branchPath]?.dirs ?? [],
-      },
-    }));
-    loadListDir(repo, snap, branchPath)
-      .then((rows) => {
-        if (identityRef.current !== startedIdentity) return;
-        if (branchGen.current[branchPath] !== gen) return;
-        const dirs = rows
-          .filter((e) => e.is_dir)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        setBranches((prev) => ({
-          ...prev,
-          [branchPath]: { loading: false, error: null, dirs },
-        }));
-      })
-      .catch((e: unknown) => {
-        if (identityRef.current !== startedIdentity) return;
-        if (branchGen.current[branchPath] !== gen) return;
-        setBranches((prev) => ({
-          ...prev,
-          [branchPath]: {
-            loading: false,
-            error: String(e),
-            dirs: prev[branchPath]?.dirs ?? [],
-          },
-        }));
-      });
-  }, [repoName, snapshotId]);
+  const loadBranch = useCallback(
+    (branchPath: string) => {
+      const gen = (branchGen.current[branchPath] ?? 0) + 1;
+      branchGen.current[branchPath] = gen;
+      const startedIdentity = identityRef.current;
+      setBranches((prev) => ({
+        ...prev,
+        [branchPath]: {
+          loading: true,
+          error: null,
+          dirs: prev[branchPath]?.dirs ?? [],
+        },
+      }));
+      loadListDir(repoName, snapshotId, branchPath)
+        .then((rows) => {
+          if (identityRef.current !== startedIdentity) return;
+          if (branchGen.current[branchPath] !== gen) return;
+          const dirs = rows
+            .filter((e) => e.is_dir)
+            .sort((a, b) => a.name.localeCompare(b.name));
+          setBranches((prev) => ({
+            ...prev,
+            [branchPath]: { loading: false, error: null, dirs },
+          }));
+        })
+        .catch((e: unknown) => {
+          if (identityRef.current !== startedIdentity) return;
+          if (branchGen.current[branchPath] !== gen) return;
+          setBranches((prev) => ({
+            ...prev,
+            [branchPath]: {
+              loading: false,
+              error: String(e),
+              dirs: prev[branchPath]?.dirs ?? [],
+            },
+          }));
+        });
+    },
+    [repoName, snapshotId],
+  );
 
   useEffect(() => {
     loadBranch("/");
@@ -110,22 +97,53 @@ export function FolderTree({
     });
   }
 
+  function focusPath(path: string) {
+    treeRef.current
+      ?.querySelector<HTMLButtonElement>(
+        `button.folder-tree-name[data-path="${CSS.escape(path)}"]`,
+      )
+      ?.focus();
+  }
+
   function onKey(e: KeyboardEvent, path: string) {
     if (e.key === "Enter") {
       e.preventDefault();
       onNavigate(path);
-    } else if (e.key === "ArrowRight") {
+      return;
+    }
+    if (e.key === "ArrowRight") {
       e.preventDefault();
       if (!expanded.has(path)) toggle(path);
-    } else if (e.key === "ArrowLeft") {
+      return;
+    }
+    if (e.key === "ArrowLeft") {
       e.preventDefault();
       if (expanded.has(path)) toggle(path);
+      return;
+    }
+    const visible = flattenVisible("/", expanded, branches);
+    const i = visible.indexOf(path);
+    if (e.key === "Home") {
+      e.preventDefault();
+      focusPath(visible[0] ?? "/");
+      return;
+    }
+    if (e.key === "End") {
+      e.preventDefault();
+      focusPath(visible[visible.length - 1] ?? "/");
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next = e.key === "ArrowDown" ? i + 1 : i - 1;
+      if (next < 0 || next >= visible.length) return;
+      focusPath(visible[next]);
     }
   }
 
   return (
-    <ul className="folder-tree" role="tree">
-      <TreeNode
+    <ul className="folder-tree" role="tree" ref={treeRef}>
+      <FolderTreeNode
         path="/"
         name="/"
         depth={0}
@@ -138,62 +156,5 @@ export function FolderTree({
         onKey={onKey}
       />
     </ul>
-  );
-}
-
-type NodeProps = {
-  path: string;
-  name: string;
-  depth: number;
-  currentPath: string;
-  expanded: Set<string>;
-  branches: Record<string, BranchState>;
-  onToggle: (p: string) => void;
-  onNavigate: (p: string) => void;
-  onRetry: (p: string) => void;
-  onKey: (e: KeyboardEvent, p: string) => void;
-};
-
-function TreeNode(p: NodeProps) {
-  const open = p.expanded.has(p.path);
-  const branch = p.branches[p.path];
-  const active = p.currentPath === p.path;
-  return (
-    <li role="treeitem" aria-expanded={open} className={active ? "is-active" : undefined}>
-      <div className="folder-tree-row" style={{ paddingLeft: p.depth * 12 }}>
-        <button
-          type="button"
-          className="folder-tree-twist"
-          aria-label={open ? "Collapse" : "Expand"}
-          onClick={() => p.onToggle(p.path)}
-        >
-          {open ? "▾" : "▸"}
-        </button>
-        <button
-          type="button"
-          className="linkish"
-          onClick={() => p.onNavigate(p.path)}
-          onKeyDown={(e) => p.onKey(e, p.path)}
-        >
-          {p.name}
-        </button>
-      </div>
-      {open && branch?.loading && (
-        <p className="app-loading" style={{ paddingLeft: (p.depth + 1) * 12 }}>Loading…</p>
-      )}
-      {open && branch?.error && (
-        <div style={{ paddingLeft: (p.depth + 1) * 12 }}>
-          <pre className="app-error">{branch.error}</pre>
-          <button type="button" onClick={() => p.onRetry(p.path)}>Retry</button>
-        </div>
-      )}
-      {open && branch && !branch.loading && !branch.error && (
-        <ul role="group">
-          {branch.dirs.map((d) => (
-            <TreeNode key={d.path} {...p} path={d.path} name={d.name} depth={p.depth + 1} />
-          ))}
-        </ul>
-      )}
-    </li>
   );
 }

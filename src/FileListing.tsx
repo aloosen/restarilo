@@ -42,9 +42,19 @@ export function FileListing({
   const crumbs = breadcrumbParts(path);
 
   useEffect(() => {
-    const first = listRef.current?.querySelector<HTMLButtonElement>("button.linkish");
+    const first = listRef.current?.querySelector<HTMLButtonElement>(
+      "button.file-listing-row",
+    );
     first?.focus();
   }, [path, entries]);
+
+  function rowButtons(): HTMLButtonElement[] {
+    const root = listRef.current;
+    if (!root) return [];
+    return Array.from(
+      root.querySelectorAll<HTMLButtonElement>("button.file-listing-row"),
+    );
+  }
 
   function onRowKey(e: KeyboardEvent, entry: DirEntry, index: number) {
     if (e.key === " ") {
@@ -57,14 +67,19 @@ export function FileListing({
       onNavigate(entry.path);
       return;
     }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      const i = e.key === "Home" ? 0 : sorted.length - 1;
+      if (i < 0) return;
+      rowButtons()[i]?.focus();
+      onSelect(sorted[i]);
+      return;
+    }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const next = e.key === "ArrowDown" ? index + 1 : index - 1;
       if (next < 0 || next >= sorted.length) return;
-      const btn = listRef.current?.querySelectorAll<HTMLButtonElement>("button.linkish")[
-        next
-      ];
-      btn?.focus();
+      rowButtons()[next]?.focus();
       onSelect(sorted[next]);
     }
   }
@@ -77,7 +92,7 @@ export function FileListing({
             {i > 0 && <span className="file-breadcrumb-sep"> / </span>}
             <button
               type="button"
-              className="linkish"
+              className="linkish file-breadcrumb-btn"
               disabled={c.target === path}
               onClick={() => onNavigate(c.target)}
             >
@@ -108,12 +123,15 @@ export function FileListing({
                 <td className="mono">
                   <button
                     type="button"
-                    className="linkish"
+                    className="linkish file-listing-row"
                     aria-current={selected ? "true" : undefined}
                     onClick={(event) => {
-                      if (!e.is_dir) return;
                       event.stopPropagation();
-                      onNavigate(e.path);
+                      onSelect(e);
+                    }}
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      if (e.is_dir) onNavigate(e.path);
                     }}
                     onKeyDown={(ev) => onRowKey(ev, e, index)}
                   >
