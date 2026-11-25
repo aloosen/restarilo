@@ -16,9 +16,7 @@ function ArchiveMark() {
   return (
     <span className="app-brand-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2" />
-        <path d="M2 10h20" />
-        <path d="M12 4v16" />
+        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" /><path d="M12 4v16" />
       </svg>
     </span>
   );
@@ -127,8 +125,7 @@ function App() {
             </p>
           ) : zeroRepos ? (
             <p className="app-loading">
-              No repositories configured. Add [[repos]] entries to config.toml and
-              restart restarilo.
+              No repositories configured. Add [[repos]] to config.toml and restart restarilo.
             </p>
           ) : (
             <>
@@ -186,9 +183,7 @@ function App() {
             {configError || zeroRepos ? (
               <p className="app-loading">Configure a repository to browse snapshots.</p>
             ) : snapError ? (
-              <p className="app-loading">
-                Could not load snapshots. Use Retry next to the snapshot control.
-              </p>
+              <p className="app-loading">Could not load snapshots. Use Retry next to the snapshot control.</p>
             ) : emptyRepo ? (
               <p className="app-loading">No snapshots in this repository.</p>
             ) : (
