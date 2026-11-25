@@ -12,9 +12,17 @@ pub struct CachedListing {
 }
 
 pub fn listing_size_est(children: &[TreeChild]) -> usize {
-    children.iter().map(|c| {
-        c.name.len() + 1 + usize::from(c.size.is_some()) * 8 + usize::from(c.subtree.is_some()) * 64
-    }).sum()
+    children
+        .iter()
+        .map(|c| {
+            c.name.len()
+                + c.entry_type.len()
+                + c.mtime.as_ref().map(|s| s.len()).unwrap_or(0)
+                + 1
+                + usize::from(c.size.is_some()) * 8
+                + usize::from(c.subtree.is_some()) * 64
+        })
+        .sum()
 }
 
 type FetchFn = Arc<dyn Fn(&str, &str) -> Result<Vec<TreeChild>, String> + Send + Sync>;

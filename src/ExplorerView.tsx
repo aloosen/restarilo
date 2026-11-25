@@ -1,9 +1,13 @@
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ExplorerListing } from "./ExplorerListing";
 import { FolderTree } from "./FolderTree";
 import type { DirEntry } from "./listDirCache";
 import { useExplorerBrowse } from "./useExplorerBrowse";
 
 export type { DirEntry };
+
+const TREE_MIN = 128;
+const TREE_DEFAULT = 224;
 
 type Props = {
   repoName: string;
@@ -21,10 +25,34 @@ export function ExplorerView({
   onActionId,
 }: Props) {
   const b = useExplorerBrowse(repoName, snapshotId);
+  const [treeWidth, setTreeWidth] = useState(TREE_DEFAULT);
+  const drag = useRef<{ startX: number; startW: number } | null>(null);
+
+  const onSplitPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    drag.current = { startX: e.clientX, startW: treeWidth };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [treeWidth]);
+
+  const onSplitPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    const root = e.currentTarget.parentElement;
+    const max = root ? Math.max(TREE_MIN, Math.floor(root.clientWidth * 0.6)) : 480;
+    const next = drag.current.startW + (e.clientX - drag.current.startX);
+    setTreeWidth(Math.min(max, Math.max(TREE_MIN, next)));
+  }, []);
+
+  const onSplitPointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    drag.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, []);
 
   return (
     <>
-      <div className="explorer-tree">
+      <div className="explorer-tree" style={{ flexBasis: treeWidth, width: treeWidth }}>
         <FolderTree
           repoName={repoName}
           snapshotId={snapshotId}
@@ -32,6 +60,18 @@ export function ExplorerView({
           onNavigate={b.navigateTo}
         />
       </div>
+      <div
+        className="explorer-split"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize tree and listing"
+        aria-valuenow={treeWidth}
+        tabIndex={0}
+        onPointerDown={onSplitPointerDown}
+        onPointerMove={onSplitPointerMove}
+        onPointerUp={onSplitPointerUp}
+        onPointerCancel={onSplitPointerUp}
+      />
       <ExplorerListing
         repoName={repoName}
         snapshotId={snapshotId}

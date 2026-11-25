@@ -4,7 +4,9 @@ export type DirEntry = {
   name: string;
   path: string;
   is_dir: boolean;
+  entry_type: string;
   size?: number | null;
+  mtime?: string | null;
 };
 
 export type CarryResult =

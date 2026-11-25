@@ -1,4 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
+import { formatMtime, formatSize } from "./formatSize";
 import type { DirEntry } from "./listDirCache";
 
 type Props = {
@@ -105,14 +106,14 @@ export function FileListing({
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>Size</th>
+            <th>Modified</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((e, index) => {
             const selected = selectedPath === e.path;
-            const size =
-              e.size === null || e.size === undefined ? "" : String(e.size);
             return (
               <tr
                 key={e.path}
@@ -127,18 +128,22 @@ export function FileListing({
                     aria-current={selected ? "true" : undefined}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onSelect(e);
+                      if (e.is_dir) onNavigate(e.path);
+                      else onSelect(e);
                     }}
                     onDoubleClick={(event) => {
                       event.stopPropagation();
                       if (e.is_dir) onNavigate(e.path);
+                      else onSelect(e);
                     }}
                     onKeyDown={(ev) => onRowKey(ev, e, index)}
                   >
                     {e.is_dir ? `${e.name}/` : e.name}
                   </button>
                 </td>
-                <td className="mono">{size}</td>
+                <td>{e.entry_type || (e.is_dir ? "dir" : "file")}</td>
+                <td className="mono">{formatSize(e.size)}</td>
+                <td className="mono">{formatMtime(e.mtime)}</td>
               </tr>
             );
           })}

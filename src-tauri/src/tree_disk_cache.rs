@@ -21,8 +21,12 @@ struct DiskListing {
 struct DiskChild {
     name: String,
     is_dir: bool,
+    #[serde(default)]
+    entry_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mtime: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     subtree: Option<String>,
 }
@@ -55,11 +59,24 @@ impl TreeDiskCache {
             parsed
                 .children
                 .into_iter()
-                .map(|c| TreeChild {
-                    name: c.name,
-                    is_dir: c.is_dir,
-                    size: c.size,
-                    subtree: c.subtree,
+                .map(|c| {
+                    let entry_type = if c.entry_type.is_empty() {
+                        if c.is_dir {
+                            "dir".into()
+                        } else {
+                            "file".into()
+                        }
+                    } else {
+                        c.entry_type
+                    };
+                    TreeChild {
+                        name: c.name,
+                        is_dir: c.is_dir,
+                        entry_type,
+                        size: c.size,
+                        mtime: c.mtime,
+                        subtree: c.subtree,
+                    }
                 })
                 .collect(),
         )
@@ -76,7 +93,9 @@ impl TreeDiskCache {
                 .map(|c| DiskChild {
                     name: c.name.clone(),
                     is_dir: c.is_dir,
+                    entry_type: c.entry_type.clone(),
                     size: c.size,
+                    mtime: c.mtime.clone(),
                     subtree: c.subtree.clone(),
                 })
                 .collect(),
@@ -171,7 +190,9 @@ mod tests {
         let kids = vec![TreeChild {
             name: "a".into(),
             is_dir: true,
+            entry_type: "dir".into(),
             size: None,
+            mtime: None,
             subtree: Some("abc".into()),
         }];
         let tid = "aa".repeat(32);
@@ -203,7 +224,9 @@ mod tests {
                 &[TreeChild {
                     name: bulky.clone(),
                     is_dir: false,
+                    entry_type: "file".into(),
                     size: None,
+                    mtime: None,
                     subtree: None,
                 }],
             );
@@ -232,7 +255,9 @@ mod tests {
         let kids = vec![TreeChild {
             name: "x".repeat((DISK_BUDGET as usize) + 8),
             is_dir: false,
+            entry_type: "file".into(),
             size: None,
+            mtime: None,
             subtree: None,
         }];
         let tid = "cc".repeat(32);

@@ -8,7 +8,9 @@ fn child(name: &str) -> TreeChild {
     TreeChild {
         name: name.into(),
         is_dir: false,
+        entry_type: "file".into(),
         size: Some(1),
+        mtime: None,
         subtree: None,
     }
 }
@@ -151,7 +153,9 @@ fn skip_oversized_listing() {
             vec![TreeChild {
                 name: "x".repeat(MEMORY_BUDGET + 10),
                 is_dir: false,
+                entry_type: "file".into(),
                 size: None,
+                mtime: None,
                 subtree: None,
             }],
         )

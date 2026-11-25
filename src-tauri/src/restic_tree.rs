@@ -12,7 +12,10 @@ static FETCH_BY_TREE: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
 pub struct TreeChild {
     pub name: String,
     pub is_dir: bool,
+    /// restic node type: file, dir, symlink, …
+    pub entry_type: String,
     pub size: Option<u64>,
+    pub mtime: Option<String>,
     pub subtree: Option<String>,
 }
 
@@ -30,6 +33,8 @@ struct TreeNode {
     #[serde(default)]
     node_type: String,
     size: Option<u64>,
+    #[serde(default)]
+    mtime: Option<String>,
     subtree: Option<String>,
 }
 
@@ -135,11 +140,20 @@ pub fn parse_tree_json(raw: &str) -> Result<Vec<TreeChild>, String> {
     Ok(blob
         .nodes
         .into_iter()
-        .map(|n| TreeChild {
-            name: decode_restic_name(&n.name),
-            is_dir: n.node_type == "dir",
-            size: n.size,
-            subtree: n.subtree.filter(|s| !s.is_empty()),
+        .map(|n| {
+            let entry_type = if n.node_type.is_empty() {
+                "file".into()
+            } else {
+                n.node_type
+            };
+            TreeChild {
+                name: decode_restic_name(&n.name),
+                is_dir: entry_type == "dir",
+                entry_type,
+                size: n.size,
+                mtime: n.mtime.filter(|s| !s.is_empty()),
+                subtree: n.subtree.filter(|s| !s.is_empty()),
+            }
         })
         .collect())
 }

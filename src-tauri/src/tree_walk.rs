@@ -59,7 +59,9 @@ pub fn list_dir(
                 name: c.name.clone(),
                 path,
                 is_dir: c.is_dir,
+                entry_type: c.entry_type.clone(),
                 size: c.size,
+                mtime: c.mtime.clone(),
             }
         })
         .collect();

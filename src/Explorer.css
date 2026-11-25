@@ -28,9 +28,9 @@
 .explorer {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
-  gap: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   overflow: hidden;
 }
 
@@ -46,7 +46,31 @@
   flex-direction: column;
 }
 
+.explorer-tree {
+  flex: 0 0 auto;
+}
+
+.explorer-split {
+  flex: 0 0 6px;
+  margin: 0 3px;
+  border-radius: 3px;
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.explorer-split:hover,
+.explorer-split:focus-visible {
+  background: color-mix(in srgb, var(--fg) 35%, var(--border));
+}
+
+.explorer-split:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+
 .explorer-listing {
+  flex: 1 1 auto;
   overflow: hidden;
 }
 
@@ -75,7 +99,8 @@
 }
 
 .file-browser-toolbar button,
-.file-actions button {
+.file-actions button,
+.app-action-bar button {
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -107,7 +132,8 @@
   margin-left: auto;
 }
 
-.file-actions-busy {
+.file-actions-busy,
+.explorer-chrome-paths {
   color: var(--muted);
   font-size: 13px;
 }
@@ -117,15 +143,6 @@
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
-}
-
-.app-action-bar button {
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
 }
 
 .folder-tree,
@@ -165,14 +182,18 @@
   color: var(--muted);
 }
 
-.explorer-chrome-paths {
-  color: var(--muted);
-  font-size: 13px;
-}
-
 @media (max-width: 900px) {
   .explorer {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(8rem, 30%) minmax(0, 1fr);
+    flex-direction: column;
+  }
+
+  .explorer-tree {
+    width: 100% !important;
+    flex-basis: auto !important;
+    max-height: 30%;
+  }
+
+  .explorer-split {
+    display: none;
   }
 }

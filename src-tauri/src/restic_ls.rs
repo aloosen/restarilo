@@ -7,8 +7,11 @@ pub struct DirEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    pub entry_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mtime: Option<String>,
 }
 
 pub fn normalize_dir_path(path: &str) -> String {
