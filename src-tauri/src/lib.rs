@@ -9,6 +9,7 @@ mod restic_ls;
 mod restic_tree;
 mod ssh;
 mod tree_cache;
+mod tree_prefetch;
 mod tree_walk;
 
 use app_state::AppState;

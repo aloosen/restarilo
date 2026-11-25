@@ -42,6 +42,7 @@ pub async fn list_snapshots(
 ) -> Result<Vec<SnapshotRow>, String> {
     let cache = state.tree_cache.clone();
     let generation = cache.begin_list_snapshots(&repo_name);
+    state.prefetch.clear();
     let rows = tauri::async_runtime::spawn_blocking({
         let repo_name = repo_name.clone();
         move || {
@@ -54,11 +55,10 @@ pub async fn list_snapshots(
     if cache.generation() != generation {
         return Ok(rows);
     }
-    let roots: HashMap<_, _> = rows
-        .iter()
-        .map(|s| (s.id.clone(), s.tree.clone()))
-        .collect();
-    let _ = cache.remember_snapshots(generation, roots);
+    let roots: HashMap<_, _> = rows.iter().map(|s| (s.id.clone(), s.tree.clone())).collect();
+    if cache.remember_snapshots(generation, roots) {
+        state.prefetch.enqueue_newest_root(generation, &repo_name, &rows);
+    }
     Ok(rows)
 }
 
@@ -70,13 +70,21 @@ pub async fn list_dir(
     path: String,
 ) -> Result<Vec<DirEntry>, String> {
     let cache = state.tree_cache.clone();
+    let prefetch = state.prefetch.clone();
     let generation = cache.generation();
     tauri::async_runtime::spawn_blocking(move || {
         let cfg = cached_config()?;
         if cache.generation() != generation {
             return Err("CANCELLED: stale cache generation".into());
         }
-        restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)
+        let entries =
+            restic_ls::list_dir(cfg, &cache, generation, &repo_name, &snapshot_id, &path)?;
+        if let Some(tid) = crate::tree_walk::cached_tree_id_for_path(&cache, &snapshot_id, &path) {
+            if let Some(listing) = cache.get_cached(&tid) {
+                prefetch.enqueue_child_subtrees(generation, &repo_name, &listing);
+            }
+        }
+        Ok(entries)
     })
     .await
     .map_err(|e| format!("list_dir task failed: {e}"))?

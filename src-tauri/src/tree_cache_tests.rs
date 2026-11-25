@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -41,6 +42,21 @@ fn generation_rejects_stale_insert() {
     let gen = cache.begin_list_snapshots("a");
     cache.begin_list_snapshots("b");
     assert!(cache.insert_listing(gen, "t", vec![child("x")]).is_err());
+}
+
+#[test]
+fn late_list_snapshots_discarded() {
+    let cache = TreeCache::new();
+    let gen_a = cache.begin_list_snapshots("a");
+    let gen_b = cache.begin_list_snapshots("b");
+    let mut roots_a = HashMap::new();
+    roots_a.insert("snapA".into(), "treeA".into());
+    assert!(!cache.remember_snapshots(gen_a, roots_a));
+    let mut roots_b = HashMap::new();
+    roots_b.insert("snapB".into(), "treeB".into());
+    assert!(cache.remember_snapshots(gen_b, roots_b));
+    assert_eq!(cache.root_tree("snapB").as_deref(), Some("treeB"));
+    assert!(cache.root_tree("snapA").is_none());
 }
 
 #[test]

@@ -66,3 +66,25 @@ pub fn list_dir(
     entries.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(entries)
 }
+
+/// Leaf tree id for an absolute snapshot path using only cache hits (no fetch).
+pub fn cached_tree_id_for_path(
+    cache: &TreeCache,
+    snapshot_id: &str,
+    path: &str,
+) -> Option<String> {
+    let mut tid = cache.root_tree(snapshot_id)?;
+    let abs = normalize_dir_path(path);
+    if abs == "/" {
+        return Some(tid);
+    }
+    for segment in abs.trim_start_matches('/').split('/') {
+        if segment.is_empty() {
+            continue;
+        }
+        let listing = cache.get_cached(&tid)?;
+        let child = listing.children.iter().find(|c| c.name == segment)?;
+        tid = child.subtree.clone()?;
+    }
+    Some(tid)
+}
