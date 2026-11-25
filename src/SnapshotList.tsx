@@ -1,4 +1,4 @@
-import { formatSnapshotLabel } from "./formatSize";
+import { formatSnapshotOption } from "./formatSize";
 
 export type SnapshotRow = {
   id: string;
@@ -14,7 +14,6 @@ type Props = {
   selectedId: string | null;
   loading: boolean;
   disabled?: boolean;
-  /** Failed list_snapshots — distinct from empty repo. */
   listError: string | null;
   onSelectId: (id: string) => void;
   onRetryList?: () => void;
@@ -47,6 +46,9 @@ export function SnapshotList({
   const sorted = sortSnapshotsNewestFirst(snapshots);
   const empty = sorted.length === 0 && !listError;
   const selected = sorted.find((s) => s.id === selectedId);
+  const selectTitle = selected
+    ? formatSnapshotOption(selected).title
+    : undefined;
 
   return (
     <div className="app-snapshot">
@@ -55,17 +57,20 @@ export function SnapshotList({
         <select
           value={selectedId ?? ""}
           disabled={disabled || loading || empty || !!listError}
-          title={selected ? selected.id : undefined}
+          title={selectTitle}
           onChange={(e) => onSelectId(e.target.value)}
         >
           {(empty || listError) && (
             <option value="">{listError ? "Unavailable" : "No snapshots"}</option>
           )}
-          {sorted.map((s) => (
-            <option key={s.id} value={s.id} title={s.id}>
-              {formatSnapshotLabel(s)}
-            </option>
-          ))}
+          {sorted.map((s) => {
+            const opt = formatSnapshotOption(s);
+            return (
+              <option key={s.id} value={s.id} title={opt.title}>
+                {opt.text}
+              </option>
+            );
+          })}
         </select>
       </label>
       {loading && <span className="app-loading">Loading snapshots…</span>}

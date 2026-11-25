@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { BranchState } from "./folderTreeNav";
+import { icons, TablerSvg } from "./tablerIcons";
 
 type Props = {
   path: string;
@@ -17,6 +18,9 @@ type Props = {
 export function FolderTreeNode(p: Props) {
   const open = p.expanded.has(p.path);
   const branch = p.branches[p.path];
+  const isRoot = p.path === "/";
+  const label = isRoot ? "All files" : p.name;
+
   return (
     <li
       role="treeitem"
@@ -30,7 +34,10 @@ export function FolderTreeNode(p: Props) {
           aria-label={open ? "Collapse" : "Expand"}
           onClick={() => p.onToggle(p.path)}
         >
-          {open ? "▾" : "▸"}
+          <TablerSvg
+            svg={open ? icons.chevronDown : icons.chevronRight}
+            className="folder-tree-twist-icon"
+          />
         </button>
         <button
           type="button"
@@ -39,7 +46,13 @@ export function FolderTreeNode(p: Props) {
           onClick={() => p.onNavigate(p.path)}
           onKeyDown={(e) => p.onKey(e, p.path)}
         >
-          {p.name}
+          <TablerSvg
+            svg={isRoot ? icons.drive : icons.folder}
+            className={
+              isRoot ? "folder-tree-icon" : "folder-tree-icon listing-icon-folder"
+            }
+          />
+          <span>{label}</span>
         </button>
       </div>
       {open && branch?.loading && (

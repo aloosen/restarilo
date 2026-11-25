@@ -14,25 +14,76 @@ export function formatSize(bytes: number | null | undefined): string {
   return `${rounded} ${units[i]}`;
 }
 
-/** Compact local display for restic RFC3339 mtimes. */
-export function formatMtime(raw: string | null | undefined): string {
-  if (!raw) return "";
+function parsedDate(raw: string): Date | null {
   const ms = Date.parse(raw);
-  if (!Number.isFinite(ms)) return raw;
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms);
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Full local timestamp (for title / detail). */
+export function formatMtimeFull(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const d = parsedDate(raw);
+  if (!d) return raw;
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-/** Readable snapshot select / action label (date+time + hostname; short id detail). */
+/** Short one-line listing date (no seconds). */
+export function formatMtime(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const d = parsedDate(raw);
+  if (!d) return raw;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Snapshot select primary text: date+time without seconds. */
+export function formatSnapshotWhen(time: string): string {
+  return formatMtime(time) || time;
+}
+
+/** Readable snapshot label for overwrite / chrome (when + host + short id). */
 export function formatSnapshotLabel(s: {
   id: string;
   short_id: string;
   time: string;
   hostname: string;
 }): string {
-  const when = formatMtime(s.time) || s.time;
+  const when = formatSnapshotWhen(s.time);
   const short = s.short_id || s.id.slice(0, 8);
   const host = s.hostname?.trim();
   return host ? `${when} · ${host} · ${short}` : `${when} · ${short}`;
+}
+
+/** Closed select option: date+time + hostname; short/full id in title. */
+export function formatSnapshotOption(s: {
+  id: string;
+  short_id: string;
+  time: string;
+  hostname: string;
+}): { text: string; title: string } {
+  const when = formatSnapshotWhen(s.time);
+  const short = s.short_id || s.id.slice(0, 8);
+  const host = s.hostname?.trim();
+  const text = host ? `${when} · ${host}` : when;
+  const title = host
+    ? `${when} · ${host} · ${short} (${s.id})`
+    : `${when} · ${short} (${s.id})`;
+  return { text, title };
+}
+
+/** Top-level backup paths from the snapshot for header chrome. */
+export function formatSnapshotTopDirs(paths: string[] | null | undefined): string {
+  if (!paths || paths.length === 0) return "";
+  return paths
+    .map((p) => {
+      const trimmed = p.replace(/\/+$/, "");
+      if (!trimmed || trimmed === "/") return "/";
+      const segs = trimmed.split("/").filter(Boolean);
+      return segs[segs.length - 1] ?? trimmed;
+    })
+    .join(" · ");
 }

@@ -36,9 +36,6 @@ export function ExplorerListing(p: Props) {
   const [success, setSuccess] = useState<string | null>(null);
   const crumbs = breadcrumbParts(p.path);
   const heading = folderHeading(p.path);
-  const statusSelection = p.selection
-    ? `${p.selection.name} selected`
-    : "No selection";
 
   useEffect(() => {
     setSuccess(null);
@@ -131,11 +128,6 @@ export function ExplorerListing(p: Props) {
             />
           )}
         </div>
-        {p.listingReady && (
-          <footer className="file-status-bar" aria-live="polite">
-            {p.entries.length} entries · {statusSelection}
-          </footer>
-        )}
       </section>
     </div>
   );

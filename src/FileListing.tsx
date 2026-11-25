@@ -1,7 +1,8 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import { formatMtime, formatSize } from "./formatSize";
+import { resolveFileKind } from "./fileKind";
+import { formatMtime, formatMtimeFull, formatSize } from "./formatSize";
 import type { DirEntry } from "./listDirCache";
-import { FileIcon, FolderIcon } from "./listingIcons";
+import { EntryIcon } from "./tablerIcons";
 
 type Props = {
   path: string;
@@ -86,6 +87,8 @@ export function FileListing({
         <tbody>
           {sorted.map((e, index) => {
             const selected = selectedPath === e.path;
+            const kind = resolveFileKind(e);
+            const full = formatMtimeFull(e.mtime);
             return (
               <tr
                 key={e.path}
@@ -110,18 +113,16 @@ export function FileListing({
                     }}
                     onKeyDown={(ev) => onRowKey(ev, e, index)}
                   >
-                    {e.is_dir ? (
-                      <FolderIcon className="listing-icon listing-icon-folder" />
-                    ) : (
-                      <FileIcon className="listing-icon" />
-                    )}
+                    <EntryIcon kind={kind} />
                     <span className="listing-name">{e.name}</span>
                   </button>
                 </td>
                 <td className="col-size mono">
                   {e.is_dir ? "–" : formatSize(e.size) || "–"}
                 </td>
-                <td className="col-mtime mono">{formatMtime(e.mtime) || "–"}</td>
+                <td className="col-mtime mono" title={full || undefined}>
+                  {formatMtime(e.mtime) || "–"}
+                </td>
               </tr>
             );
           })}

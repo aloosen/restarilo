@@ -8,6 +8,7 @@ import {
   targetFromExistsError,
   type ActionKind,
 } from "./actionFeedback";
+import { icons, TablerSvg } from "./tablerIcons";
 
 export type FileSelection = {
   path: string;
@@ -166,6 +167,7 @@ export function FileActions(p: Props) {
         disabled={block || !selection}
         onClick={() => void runRestoreOrDump("restore_path")}
       >
+        <TablerSvg svg={icons.restore} className="action-icon" />
         Restore
       </button>
       <button
@@ -173,6 +175,7 @@ export function FileActions(p: Props) {
         disabled={block || !selection}
         onClick={() => void runRestoreOrDump("dump_path")}
       >
+        <TablerSvg svg={icons.export} className="action-icon" />
         Export
       </button>
       <button
@@ -180,6 +183,7 @@ export function FileActions(p: Props) {
         disabled={block || !selection || !!selection?.is_dir}
         onClick={() => void onOpen()}
       >
+        <TablerSvg svg={icons.open} className="action-icon" />
         Open
       </button>
     </div>

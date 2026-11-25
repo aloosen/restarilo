@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
-import { formatSnapshotLabel } from "./formatSize";
+import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import {
   SnapshotList,
@@ -108,6 +108,14 @@ function App() {
     !loading && !snapError && selectedRepo !== "" && snapshots.length === 0;
   const showExplorer = selectedSnapshot !== null && !loading && !snapError;
   const zeroRepos = reposReady && !configError && repos.length === 0;
+  const topDirs = selectedSnapshot
+    ? formatSnapshotTopDirs(selectedSnapshot.paths)
+    : "";
+
+  let emptyMsg = "Loading snapshots…";
+  if (configError || zeroRepos) emptyMsg = "Configure a repository to browse snapshots.";
+  else if (snapError) emptyMsg = "Could not load snapshots. Use Retry next to the snapshot control.";
+  else if (emptyRepo) emptyMsg = "No snapshots in this repository.";
 
   return (
     <main className="app">
@@ -116,12 +124,18 @@ function App() {
           <ArchiveMark />
           <span className="app-brand-name">restarilo</span>
         </div>
+        <div
+          className="app-chrome-paths"
+          title={selectedSnapshot?.paths?.join("\n")}
+          aria-live="polite"
+        >
+          {topDirs || "\u00a0"}
+        </div>
         <div className="app-chrome-controls">
           {configError ? (
             <p className="app-error app-config-error">
               Could not load configuration. Fix config.toml and restart restarilo.
-              {"\n"}
-              {configError}
+              {"\n"}{configError}
             </p>
           ) : zeroRepos ? (
             <p className="app-loading">
@@ -137,9 +151,7 @@ function App() {
                   disabled={repos.length === 0 || actionBusy}
                 >
                   {repos.map((r) => (
-                    <option key={r.name} value={r.name}>
-                      {r.name}
-                    </option>
+                    <option key={r.name} value={r.name}>{r.name}</option>
                   ))}
                 </select>
               </label>
@@ -158,13 +170,10 @@ function App() {
           )}
         </div>
       </header>
-
       {actionBusy && (
         <div className="app-action-bar">
           <span className="file-actions-busy">{busyLabel ?? "Working…"}</span>
-          <button type="button" onClick={onCancel}>
-            Cancel
-          </button>
+          <button type="button" onClick={onCancel}>Cancel</button>
         </div>
       )}
 
@@ -180,15 +189,7 @@ function App() {
           />
         ) : (
           <div className="explorer-listing">
-            {configError || zeroRepos ? (
-              <p className="app-loading">Configure a repository to browse snapshots.</p>
-            ) : snapError ? (
-              <p className="app-loading">Could not load snapshots. Use Retry next to the snapshot control.</p>
-            ) : emptyRepo ? (
-              <p className="app-loading">No snapshots in this repository.</p>
-            ) : (
-              <p className="app-loading">Loading snapshots…</p>
-            )}
+            <p className="app-loading">{emptyMsg}</p>
           </div>
         )}
       </section>
