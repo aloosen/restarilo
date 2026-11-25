@@ -3,6 +3,7 @@ mod commands;
 mod commands_folder;
 mod commands_smb;
 mod config;
+mod folder_debug;
 mod folder_index;
 mod folder_index_emit;
 mod restic_actions;
@@ -120,7 +121,9 @@ pub fn run() {
             commands::cancel_action,
             commands::restore_path,
             commands::dump_path,
-            commands::open_path
+            commands::open_path,
+            folder_debug::folder_debug_path,
+            folder_debug::folder_debug_fe
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
