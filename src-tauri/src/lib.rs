@@ -78,14 +78,86 @@ fn restic_version() -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+#[tauri::command]
+async fn restore_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    target_dir: String,
+    overwrite: bool,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::restore_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            &target_dir,
+            overwrite,
+        )
+    })
+    .await
+    .map_err(|e| format!("restore_path task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn dump_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    is_dir: bool,
+    target_dir: String,
+    overwrite: bool,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::dump_path(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            &path,
+            &name,
+            is_dir,
+            &target_dir,
+            overwrite,
+        )
+    })
+    .await
+    .map_err(|e| format!("dump_path task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn open_path(
+    repo_name: String,
+    snapshot_id: String,
+    path: String,
+    name: String,
+    is_dir: bool,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = cached_config()?;
+        restic_actions::open_path(cfg, &repo_name, &snapshot_id, &path, &name, is_dir)
+    })
+    .await
+    .map_err(|e| format!("open_path task failed: {e}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             restic_version,
             list_repos,
             list_snapshots,
-            list_dir
+            list_dir,
+            restore_path,
+            dump_path,
+            open_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
