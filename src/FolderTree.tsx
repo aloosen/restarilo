@@ -3,15 +3,11 @@ import {
   ancestorPaths,
   applyFolderDirsResult,
   flattenVisible,
-  mergeBranchFromEvent,
   type BranchState,
 } from "./folderTreeNav";
 import { FolderTreeNode } from "./FolderTreeNode";
-import {
-  loadFolderDirs,
-  mergeFolderDirs,
-  subscribeFolderIndex,
-} from "./folderIndex";
+import { loadFolderDirs, mergeFolderDirs } from "./folderIndex";
+import { useFolderIndexSubscribe } from "./useFolderIndexSubscribe";
 
 type Props = {
   repoName: string;
@@ -42,32 +38,13 @@ export function FolderTree({
     activeGeneration.current = null;
   }, [repoName, snapshotId]);
 
-  useEffect(() => {
-    let alive = true;
-    let unlisten: (() => void) | undefined;
-    void subscribeFolderIndex(
-      repoName,
-      snapshotId,
-      () => activeGeneration.current,
-      (ev) => {
-        if (!alive || identityRef.current !== `${repoName}\0${snapshotId}`) return;
-        setBranches((prev) => {
-          const cur = prev[ev.parentPath];
-          const dirs = mergeFolderDirs(cur?.dirs ?? [], ev.dirs);
-          return {
-            ...prev,
-            [ev.parentPath]: mergeBranchFromEvent(cur, dirs, ev.childrenComplete),
-          };
-        });
-      },
-    ).then((u) => {
-      unlisten = u;
-    });
-    return () => {
-      alive = false;
-      unlisten?.();
-    };
-  }, [repoName, snapshotId]);
+  useFolderIndexSubscribe(
+    repoName,
+    snapshotId,
+    activeGeneration,
+    identityRef,
+    setBranches,
+  );
 
   const loadBranch = useCallback(
     (branchPath: string, prioritize: boolean) => {
@@ -77,7 +54,6 @@ export function FolderTree({
       setBranches((prev) => {
         const cur = prev[branchPath];
         const dirs = cur?.dirs ?? [];
-        // Keep existing children visible; only spin when this branch is still empty.
         return {
           ...prev,
           [branchPath]: {
@@ -134,15 +110,14 @@ export function FolderTree({
   }, [currentPath, loadBranch]);
 
   function toggle(path: string) {
+    const collapsing = expanded.has(path);
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else {
-        next.add(path);
-        loadBranch(path, true);
-      }
+      if (collapsing) next.delete(path);
+      else next.add(path);
       return next;
     });
+    if (!collapsing) loadBranch(path, true);
   }
 
   function navigate(path: string) {
