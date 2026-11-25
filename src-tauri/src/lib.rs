@@ -9,10 +9,12 @@ mod restic_ls;
 mod restic_tree;
 mod ssh;
 mod tree_cache;
+mod tree_disk_cache;
 mod tree_prefetch;
 mod tree_walk;
 
 use app_state::AppState;
+use std::sync::Arc;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +23,13 @@ pub fn run() {
         let cfg = commands::cached_config()?;
         restic_tree::cat_tree(cfg, repo, tree_id)
     });
+    if let Ok(cfg) = commands::cached_config() {
+        if let Ok(Some(dir)) = config::resolve_cache_dir(cfg) {
+            state
+                .tree_cache
+                .set_disk(Some(Arc::new(tree_disk_cache::TreeDiskCache::open(dir))));
+        }
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)

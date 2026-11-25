@@ -118,6 +118,22 @@ pub fn cat_tree(cfg: &Config, repo_name: &str, tree_id: &str) -> Result<Vec<Tree
     Ok(children)
 }
 
+#[derive(Deserialize)]
+struct RepoConfigJson {
+    #[serde(default)]
+    id: String,
+}
+
+pub fn restic_repository_id(cfg: &Config, repo_name: &str) -> Result<String, String> {
+    let raw = run_restic(cfg, repo_name, &["cat", "config"])?;
+    let parsed: RepoConfigJson = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("failed to parse restic config JSON: {e}"))?;
+    if parsed.id.trim().is_empty() {
+        return Err("restic config missing id".into());
+    }
+    Ok(parsed.id)
+}
+
 fn record_fetch(tree_id: &str) {
     FETCH_TOTAL.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut guard) = FETCH_BY_TREE.lock() {

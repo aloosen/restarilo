@@ -1,4 +1,5 @@
 use crate::restic_tree::TreeChild;
+use crate::tree_disk_cache::TreeDiskCache;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -36,6 +37,8 @@ struct Inner {
     bytes: usize,
     in_flight: HashMap<String, Flight>,
     fetch: Option<FetchFn>,
+    disk: Option<Arc<TreeDiskCache>>,
+    session_repo_id: Option<String>,
 }
 
 impl TreeCache {
@@ -49,8 +52,23 @@ impl TreeCache {
                 bytes: 0,
                 in_flight: HashMap::new(),
                 fetch: None,
+                disk: None,
+                session_repo_id: None,
             }),
         }
+    }
+
+    pub fn set_disk(&self, disk: Option<Arc<TreeDiskCache>>) {
+        self.inner.lock().unwrap().disk = disk;
+    }
+
+    pub fn set_session_repo_id(&self, generation: u64, repo_id: Option<String>) -> bool {
+        let mut g = self.inner.lock().unwrap();
+        if g.generation != generation {
+            return false;
+        }
+        g.session_repo_id = repo_id;
+        true
     }
 
     pub fn set_fetcher<F>(&self, f: F)
@@ -68,6 +86,7 @@ impl TreeCache {
         g.lru.clear();
         g.bytes = 0;
         g.in_flight.clear();
+        g.session_repo_id = None;
         g.generation
     }
 
@@ -140,6 +159,17 @@ impl TreeCache {
         if let Some(hit) = self.get_cached(tree_id) {
             return Ok(hit);
         }
+        {
+            let g = self.inner.lock().unwrap();
+            if g.generation == generation {
+                if let (Some(disk), Some(rid)) = (g.disk.clone(), g.session_repo_id.clone()) {
+                    drop(g);
+                    if let Some(children) = disk.get(&rid, tree_id) {
+                        return self.insert_listing(generation, tree_id, children);
+                    }
+                }
+            }
+        }
         let (slot, is_leader) = {
             let mut g = self.inner.lock().unwrap();
             if g.generation != generation {
@@ -172,7 +202,16 @@ impl TreeCache {
         let fetch = self.inner.lock().unwrap().fetch.clone();
         let outcome = match fetch {
             Some(f) => match f(repo, tree_id) {
-                Ok(children) => self.insert_listing(generation, tree_id, children),
+                Ok(children) => {
+                    let (disk, rid) = {
+                        let g = self.inner.lock().unwrap();
+                        (g.disk.clone(), g.session_repo_id.clone())
+                    };
+                    if let (Some(disk), Some(rid)) = (disk, rid) {
+                        disk.put(&rid, tree_id, &children);
+                    }
+                    self.insert_listing(generation, tree_id, children)
+                }
                 Err(e) => Err(e),
             },
             None => Err("tree fetch not configured".into()),

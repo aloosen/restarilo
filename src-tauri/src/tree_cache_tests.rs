@@ -45,6 +45,35 @@ fn generation_rejects_stale_insert() {
 }
 
 #[test]
+fn disk_hit_survives_memory_clear() {
+    use crate::tree_disk_cache::TreeDiskCache;
+    let dir = std::env::temp_dir().join(format!("restarilo-memdisk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let disk = Arc::new(TreeDiskCache::open(dir.clone()));
+    let cache = TreeCache::new();
+    cache.set_disk(Some(disk));
+    let gen = cache.begin_list_snapshots("local");
+    assert!(cache.set_session_repo_id(gen, Some("repoid".into())));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
+    cache.set_fetcher(move |_r, _t| {
+        c2.fetch_add(1, Ordering::SeqCst);
+        Ok(vec![child("from-fetch")])
+    });
+    cache.get_or_fetch(gen, "local", "t1").unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let gen2 = cache.begin_list_snapshots("local");
+    assert!(cache.set_session_repo_id(gen2, Some("repoid".into())));
+    cache.set_fetcher(move |_r, _t| {
+        Err("should not fetch".into())
+    });
+    let listing = cache.get_or_fetch(gen2, "local", "t1").unwrap();
+    assert_eq!(listing.children[0].name, "from-fetch");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn late_list_snapshots_discarded() {
     let cache = TreeCache::new();
     let gen_a = cache.begin_list_snapshots("a");

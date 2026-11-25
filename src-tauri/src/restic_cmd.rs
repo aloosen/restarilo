@@ -135,6 +135,7 @@ mod tests {
                     ssh_key: Some(key.to_string_lossy().into_owned()),
                 },
             ],
+            cache_dir: None,
         };
         let local_rows = list_snapshots(&cfg, "local").expect("local snapshots");
         assert!(

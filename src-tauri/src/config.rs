@@ -8,6 +8,9 @@ pub struct Config {
     pub restic: ResticSection,
     #[serde(default)]
     pub repos: Vec<RepoConfig>,
+    /// Optional on-disk tree listing cache; relative to executable dir.
+    #[serde(default)]
+    pub cache_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -130,6 +133,17 @@ pub fn resolve_path(raw: &str, exe_dir: &Path) -> Result<PathBuf, String> {
         return Ok(path);
     }
     Ok(exe_dir.join(path))
+}
+
+/// `None` when absent, empty, or whitespace-only.
+pub fn resolve_cache_dir(cfg: &Config) -> Result<Option<PathBuf>, String> {
+    let Some(raw) = cfg.cache_dir.as_ref() else {
+        return Ok(None);
+    };
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(resolve_path(raw.trim(), &exe_dir()?)?))
 }
 
 pub fn expand_tilde(raw: &str) -> String {

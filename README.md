@@ -6,6 +6,8 @@ Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
 Select a snapshot to browse its file tree (folders and files from restic tree objects via `cat blob`, keyed by tree id and reused across snapshots that share subtrees). From the file browser you can restore or dump a selection, or open a file.
 
+After the snapshot list loads, the newest snapshot’s root tree is prefetched; after you open a directory, up to four child folders are queued (one background fetch). An optional on-disk cache (see `cache_dir`) keeps listings across restarts. The in-memory session cache is capped at about 32 MiB (LRU).
+
 ## Configuration
 
 Search order for `config.toml`:
@@ -20,12 +22,28 @@ Passwords are never stored as plaintext. Each `[[repos]]` entry must set **exact
 - `password_command`
 - `insecure_no_password = true` (requires restic ≥ 0.17.0)
 
+### Optional tree listing cache
+
+```toml
+# Relative to the restarilo executable (portable). Stores filenames and directory
+# structure under v1/<restic-repo-id>/<tree-id>.json. Soft cap 256 MiB of those
+# entries only; a single oversized entry is not written. Omit or leave empty to disable.
+cache_dir = "cache/tree"
+```
+
+**Portable restart check:** point `[restic].binary` at a wrapper that logs each
+`cat blob <tree_id>` to a file, browse with `cache_dir` set, quit, copy the
+portable folder, reopen the same directory — the log should gain no new line for
+that tree id; a changed tree in a later snapshot should append its id.
+
 ### Example
 
 ```toml
 [restic]
 # optional; after ~ expansion this path must be absolute
 # binary = "/usr/local/bin/restic"
+
+cache_dir = "cache/tree"
 
 [[repos]]
 name = "local"

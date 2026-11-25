@@ -92,6 +92,7 @@ mod tests {
                     ssh_key: Some(key.to_string_lossy().into_owned()),
                 },
             ],
+            cache_dir: None,
         };
         let cfg = Arc::new(cfg);
 
