@@ -13,19 +13,31 @@ fn parent_snapshot_path(path: &str) -> String {
     }
 }
 
+/// Escape a path segment so restic `--include` treats it as a literal (not a glob).
+/// Restic uses Go `filepath.Match`: `[` opens a character class — escape as `[[]`.
+/// `*` and `?` are escaped with a backslash (Unix); `]` needs no escape once `[` is safe.
+fn escape_filter_literal(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        match c {
+            '[' => out.push_str("[[]"),
+            '*' | '?' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn target_exists_err(path: &Path) -> String {
     format!("TARGET_EXISTS:{}", path.display())
 }
 
-fn ensure_writable(path: &Path, overwrite: bool, is_file: bool) -> Result<(), String> {
-    if !path.exists() {
-        return Ok(());
-    }
-    if !overwrite {
+fn ensure_absent_or_overwrite(path: &Path, overwrite: bool) -> Result<(), String> {
+    if path.exists() && !overwrite {
         return Err(target_exists_err(path));
-    }
-    if is_file {
-        std::fs::remove_file(path).map_err(|e| format!("failed to remove {}: {e}", path.display()))?;
     }
     Ok(())
 }
@@ -41,10 +53,10 @@ pub fn restore_path(
 ) -> Result<String, String> {
     let chosen = PathBuf::from(target_dir);
     let dest = chosen.join(name);
-    ensure_writable(&dest, overwrite, false)?;
+    ensure_absent_or_overwrite(&dest, overwrite)?;
     let parent = parent_snapshot_path(path);
     let snapshot_ref = format!("{snapshot_id}:{parent}");
-    let include = format!("/{name}");
+    let include = format!("/{}", escape_filter_literal(name));
     let dest_s = chosen.to_string_lossy();
     run_restic(
         cfg,
@@ -76,15 +88,43 @@ pub fn dump_path(
     } else {
         PathBuf::from(target_dir).join(name)
     };
-    ensure_writable(&out, overwrite, true)?;
-    let out_s = out.to_string_lossy();
+    ensure_absent_or_overwrite(&out, overwrite)?;
+
+    let file_name = out
+        .file_name()
+        .ok_or_else(|| format!("invalid dump target {}", out.display()))?
+        .to_string_lossy();
+    let temp = out.with_file_name(format!(
+        ".restarilo-dump-{}-{file_name}",
+        std::process::id()
+    ));
+    if temp.exists() {
+        std::fs::remove_file(&temp)
+            .map_err(|e| format!("failed to clear temp {}: {e}", temp.display()))?;
+    }
+
+    let temp_s = temp.to_string_lossy();
     let mut args: Vec<&str> = vec!["dump"];
     if is_dir {
         args.push("-a");
         args.push("zip");
     }
-    args.extend(["--target", &out_s, snapshot_id, path]);
-    run_restic(cfg, repo_name, &args)?;
+    args.extend(["--target", &temp_s, snapshot_id, path]);
+
+    let dump_result = run_restic(cfg, repo_name, &args);
+    if let Err(e) = dump_result {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
+    }
+
+    if out.exists() {
+        std::fs::remove_file(&out)
+            .map_err(|e| format!("failed to replace {}: {e}", out.display()))?;
+    }
+    std::fs::rename(&temp, &out).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("failed to move dump into place {}: {e}", out.display())
+    })?;
     Ok(out.to_string_lossy().into_owned())
 }
 
@@ -115,4 +155,20 @@ pub fn open_path(
     )?;
     open::that(&temp).map_err(|e| format!("failed to open {}: {e}", temp.display()))?;
     Ok(temp.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_filter_literal;
+
+    #[test]
+    fn escape_brackets_as_literal_class() {
+        assert_eq!(escape_filter_literal("a[1].txt"), "a[[]1].txt");
+    }
+
+    #[test]
+    fn escape_glob_metacharacters() {
+        assert_eq!(escape_filter_literal("a*b?c"), r"a\*b\?c");
+        assert_eq!(escape_filter_literal("plain.txt"), "plain.txt");
+    }
 }

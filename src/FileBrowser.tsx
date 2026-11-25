@@ -25,7 +25,8 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
   const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [selection, setSelection] = useState<FileSelection | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadedPath, setLoadedPath] = useState<string | null>(null);
   const upRef = useRef<HTMLButtonElement>(null);
@@ -36,7 +37,8 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
     setPath("/");
     setEntries([]);
     setSelection(null);
-    setError(null);
+    setLoadError(null);
+    setActionError(null);
     setLoading(true);
     setLoadedPath(null);
     pendingFocusPath.current = "/";
@@ -46,7 +48,8 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
     let discarded = false;
     setLoading(true);
     setLoadedPath(null);
-    setError(null);
+    setLoadError(null);
+    setActionError(null);
     setEntries([]);
     setSelection(null);
     const requestedPath = path;
@@ -60,7 +63,7 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
       .catch((e: unknown) => {
         if (!discarded) {
           setEntries([]);
-          setError(String(e));
+          setLoadError(String(e));
           setLoadedPath(requestedPath);
         }
       })
@@ -82,7 +85,7 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
     const first = listRef.current?.querySelector<HTMLButtonElement>("button.linkish");
     if (first) first.focus();
     else upRef.current?.focus();
-  }, [loading, loadedPath, path, entries, error]);
+  }, [loading, loadedPath, path, entries, loadError]);
 
   function navigateTo(next: string) {
     pendingFocusPath.current = next;
@@ -103,6 +106,7 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
   }
 
   const atRoot = path === "/";
+  const showList = !loading && !loadError;
 
   return (
     <section className="file-browser">
@@ -121,13 +125,14 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
           snapshotId={snapshotId}
           selection={selection}
           disabled={loading}
-          onError={setError}
+          onError={setActionError}
         />
       </div>
       <div className="file-browser-body" ref={listRef}>
-        {error && <pre className="app-error">{error}</pre>}
+        {loadError && <pre className="app-error">{loadError}</pre>}
+        {actionError && <pre className="app-error">{actionError}</pre>}
         {loading && <p className="app-loading">Loading directory…</p>}
-        {!loading && !error && (
+        {showList && (
           <table className="app-table">
             <thead>
               <tr>
