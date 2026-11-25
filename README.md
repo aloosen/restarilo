@@ -4,7 +4,7 @@ Minimal restic GUI wrapper (Tauri 2 + React).
 
 Esperanto: *restarilo* — restoration tool (`restarigi` + `-ilo`).
 
-Select a snapshot to browse its file tree (folders and files via `restic ls`).
+Select a snapshot to browse its file tree (folders and files via `restic ls`). From the file browser you can restore or dump a selection, or open a file.
 
 ## Configuration
 
@@ -85,6 +85,14 @@ cd src-tauri && cargo test --lib live_local_and_sftp_snapshots -- --nocapture
 ```
 
 Missing fixtures fail the live test (no silent skip).
+
+### Restore / dump / open (manual)
+
+With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config.toml`:
+
+1. Browse a snapshot, select a **file**, then Restore / Dump / Open (Open uses `restarilo-open-*` under the OS temp dir; restarilo does not clean these up).
+2. Select a **directory**, then Restore and Dump (zip). Open stays disabled.
+3. Repeat on the SFTP repo. Cancel the folder dialog → no change and no error.
 
 ## Dev
 
