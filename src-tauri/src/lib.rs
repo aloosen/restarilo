@@ -1,6 +1,7 @@
 mod app_state;
 mod commands;
 mod commands_folder;
+mod commands_smb;
 mod config;
 mod folder_index;
 mod folder_index_emit;
@@ -113,6 +114,8 @@ pub fn run() {
             commands_folder::list_snapshots,
             commands_folder::list_dir,
             commands_folder::list_folder_dirs,
+            commands_smb::probe_share_access,
+            commands_smb::sign_in_network_share,
             commands::begin_action,
             commands::cancel_action,
             commands::restore_path,

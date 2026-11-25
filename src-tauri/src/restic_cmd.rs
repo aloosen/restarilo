@@ -6,12 +6,25 @@ use std::process::{Command, Stdio};
 #[path = "restic_snapshots.rs"]
 mod restic_snapshots;
 pub use restic_snapshots::{list_snapshots, SnapshotRow};
+pub(crate) use restic_snapshots::parse_snapshot_rows_json;
 
 pub fn find_repo<'a>(cfg: &'a Config, name: &str) -> Result<&'a RepoConfig, String> {
     cfg.repos
         .iter()
         .find(|r| r.name == name)
         .ok_or_else(|| format!("unknown repo '{name}'"))
+}
+
+pub(crate) fn repository_env_value(path: &str) -> String {
+    repository_env_value_for(path, cfg!(windows))
+}
+
+fn repository_env_value_for(path: &str, on_windows: bool) -> String {
+    if on_windows && crate::smb_unc::is_unc_path(path) {
+        crate::smb_unc::normalize_unc_path(path)
+    } else {
+        path.to_string()
+    }
 }
 
 pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Command, String> {
@@ -24,7 +37,7 @@ pub(crate) fn prepare_restic_command(cfg: &Config, repo_name: &str) -> Result<Co
     cmd.env_remove("RESTIC_PASSWORD_FILE");
     cmd.env_remove("RESTIC_PASSWORD_COMMAND");
     cmd.env_remove("RESTIC_REPOSITORY_FILE");
-    cmd.env("RESTIC_REPOSITORY", &repo.path);
+    cmd.env("RESTIC_REPOSITORY", repository_env_value(&repo.path));
     match &mode {
         PasswordMode::File(path) => {
             cmd.env("RESTIC_PASSWORD_FILE", path);
@@ -73,6 +86,27 @@ mod tests {
     use crate::config::{ResticSection, RepoConfig};
     use serde::Deserialize;
     use std::path::Path;
+
+    #[test]
+    fn unc_env_normalizes_forward_slash_on_windows() {
+        assert_eq!(
+            repository_env_value_for("//nas/backups/repo", true),
+            r"\\nas\backups\repo"
+        );
+        assert_eq!(
+            repository_env_value_for(r"\\nas\backups\repo", true),
+            r"\\nas\backups\repo"
+        );
+        assert_eq!(
+            repository_env_value_for("//nas/backups/repo", false),
+            "//nas/backups/repo"
+        );
+        assert_eq!(repository_env_value_for("/var/backup", true), "/var/backup");
+        assert_eq!(
+            repository_env_value_for("sftp:u@h:/r", true),
+            "sftp:u@h:/r"
+        );
+    }
 
     #[test]
     fn parse_snapshot_without_tags_field() {

@@ -9,6 +9,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tauri::State;
 
+#[path = "restic_timed.rs"]
+mod restic_timed;
+
 #[tauri::command]
 pub async fn list_snapshots(
     state: State<'_, AppState>,
@@ -26,13 +29,7 @@ pub async fn list_snapshots(
         let repo_name = repo_name.clone();
         move || {
             let cfg = cached_config()?;
-            let rows = restic_cmd::list_snapshots(cfg, &repo_name)?;
-            let repo_id = if disk_on {
-                crate::restic_tree::restic_repository_id(cfg, &repo_name).ok()
-            } else {
-                None
-            };
-            Ok::<_, String>((rows, repo_id))
+            restic_timed::load_snapshot_rows(cfg, &repo_name, disk_on)
         }
     })
     .await
