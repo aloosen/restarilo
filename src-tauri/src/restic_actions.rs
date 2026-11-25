@@ -4,6 +4,9 @@ use crate::restic_killable::{
 };
 use std::path::{Path, PathBuf};
 
+#[path = "dump_publish.rs"]
+mod dump_publish;
+
 fn parent_snapshot_path(path: &str) -> String {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() || trimmed == "/" {
@@ -30,13 +33,9 @@ fn escape_filter_literal(name: &str) -> String {
     out
 }
 
-fn target_exists_err(path: &Path) -> String {
-    format!("TARGET_EXISTS:{}", path.display())
-}
-
 fn ensure_absent_or_overwrite(path: &Path, overwrite: bool) -> Result<(), String> {
     if path.exists() && !overwrite {
-        return Err(target_exists_err(path));
+        return Err(dump_publish::target_exists_err(path));
     }
     Ok(())
 }
@@ -132,14 +131,7 @@ pub fn dump_path(
             let _ = std::fs::remove_file(&temp);
             return Err(e);
         }
-        if out.exists() {
-            std::fs::remove_file(&out)
-                .map_err(|e| format!("failed to replace {}: {e}", out.display()))?;
-        }
-        std::fs::rename(&temp, &out).map_err(|e| {
-            let _ = std::fs::remove_file(&temp);
-            format!("failed to move dump into place {}: {e}", out.display())
-        })?;
+        dump_publish::publish_dump(&temp, &out, overwrite)?;
         Ok(out.to_string_lossy().into_owned())
     })
 }
