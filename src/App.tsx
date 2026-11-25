@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { FileBrowser } from "./FileBrowser";
@@ -15,9 +15,11 @@ function App() {
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
   const filesPaneRef = useRef<HTMLElement>(null);
   const snapshotsPaneRef = useRef<HTMLElement>(null);
   const returnFocusId = useRef<string | null>(null);
+  const actionBusy = actionId !== null;
 
   useEffect(() => {
     invoke<RepoName[]>("list_repos")
@@ -57,6 +59,23 @@ function App() {
     filesPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedSnapshot]);
 
+  const onCancel = useCallback(() => {
+    if (!actionId) return;
+    void invoke("cancel_action", { actionId });
+  }, [actionId]);
+
+  useEffect(() => {
+    if (!actionBusy) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [actionBusy, onCancel]);
+
   function selectSnapshot(row: SnapshotRow) {
     returnFocusId.current = row.id;
     setSelectedSnapshot(row);
@@ -84,7 +103,7 @@ function App() {
         <select
           value={selectedRepo}
           onChange={(e) => setSelectedRepo(e.target.value)}
-          disabled={repos.length === 0}
+          disabled={repos.length === 0 || actionBusy}
         >
           {repos.map((r) => (
             <option key={r.name} value={r.name}>
@@ -93,6 +112,15 @@ function App() {
           ))}
         </select>
       </label>
+
+      {actionBusy && (
+        <div className="app-action-bar">
+          <span className="file-actions-busy">Working…</span>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="app-panes">
         <section className="app-pane app-pane-snapshots" ref={snapshotsPaneRef}>
@@ -126,6 +154,8 @@ function App() {
                 key={`${selectedRepo}:${selectedSnapshot.id}`}
                 repoName={selectedRepo}
                 snapshotId={selectedSnapshot.id}
+                actionBusy={actionBusy}
+                onActionId={setActionId}
               />
             ) : (
               <p className="app-loading">Select a snapshot to browse files.</p>

@@ -253,6 +253,22 @@ button.linkish:focus-visible {
   font-size: 13px;
 }
 
+.app-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.app-action-bar button {
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
 @media (max-width: 900px) {
   .app-panes {
     grid-template-columns: 1fr;

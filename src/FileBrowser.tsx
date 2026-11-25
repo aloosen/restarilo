@@ -9,7 +9,12 @@ export type DirEntry = {
   size?: number | null;
 };
 
-type Props = { repoName: string; snapshotId: string };
+type Props = {
+  repoName: string;
+  snapshotId: string;
+  actionBusy?: boolean;
+  onActionId?: (id: string | null) => void;
+};
 
 function parentPath(path: string): string {
   if (path === "/" || path === "") return "/";
@@ -21,7 +26,12 @@ function parentPath(path: string): string {
   return trimmed.slice(0, idx);
 }
 
-export function FileBrowser({ repoName, snapshotId }: Props) {
+export function FileBrowser({
+  repoName,
+  snapshotId,
+  actionBusy = false,
+  onActionId,
+}: Props) {
   const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [selection, setSelection] = useState<FileSelection | null>(null);
@@ -124,7 +134,9 @@ export function FileBrowser({ repoName, snapshotId }: Props) {
           repoName={repoName}
           snapshotId={snapshotId}
           selection={selection}
-          disabled={loading}
+          disabled={loading || actionBusy}
+          actionBusy={actionBusy}
+          onActionId={onActionId}
           onError={setActionError}
         />
       </div>

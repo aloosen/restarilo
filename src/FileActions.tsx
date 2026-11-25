@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 
@@ -13,8 +12,14 @@ type Props = {
   snapshotId: string;
   selection: FileSelection | null;
   disabled?: boolean;
+  actionBusy?: boolean;
+  onActionId?: (id: string | null) => void;
   onError?: (message: string | null) => void;
 };
+
+function newActionId(): string {
+  return crypto.randomUUID();
+}
 
 async function pickFolder(): Promise<string | null> {
   const dir = await open({ directory: true, multiple: false });
@@ -27,17 +32,44 @@ export function FileActions({
   snapshotId,
   selection,
   disabled,
+  actionBusy,
+  onActionId,
   onError,
 }: Props) {
-  const [busy, setBusy] = useState(false);
   const noSel = !selection;
-  const block = disabled || busy;
+  const block = disabled || !!actionBusy;
 
-  async function invokeWithOverwrite(
-    kind: "restore_path" | "dump_path",
-    targetDir: string,
+  async function beginSession(): Promise<string> {
+    const id = newActionId();
+    await invoke("begin_action", { actionId: id });
+    onActionId?.(id);
+    return id;
+  }
+
+  function endSession() {
+    onActionId?.(null);
+  }
+
+  async function invokeAction(
+    kind: "restore_path" | "dump_path" | "open_path",
+    payload: Record<string, unknown>,
+    actionId: string,
   ) {
+    try {
+      await invoke(kind, { ...payload, actionId });
+    } catch (e: unknown) {
+      const msg = String(e);
+      if (msg.includes("CANCELLED:")) return;
+      throw e;
+    }
+  }
+
+  async function runRestoreOrDump(kind: "restore_path" | "dump_path") {
     if (!selection) return;
+    const targetDir = await pickFolder();
+    if (!targetDir) return;
+    onError?.(null);
+
     const base = {
       repoName,
       snapshotId,
@@ -45,64 +77,56 @@ export function FileActions({
       name: selection.name,
       targetDir,
     };
-    const payload =
-      kind === "dump_path"
-        ? { ...base, isDir: selection.is_dir, overwrite: false }
-        : { ...base, overwrite: false };
 
-    const tryOnce = (overwrite: boolean) =>
-      invoke(
-        kind,
-        kind === "dump_path"
-          ? { ...payload, overwrite }
-          : { ...base, overwrite },
-      );
-
-    try {
-      await tryOnce(false);
-    } catch (e: unknown) {
-      const msg = String(e);
-      if (!msg.includes("TARGET_EXISTS:")) throw e;
-      const ok = await ask("Target already exists. Overwrite?", {
-        title: "Overwrite?",
-        kind: "warning",
-      });
-      if (!ok) return;
-      await tryOnce(true);
+    async function attempt(overwrite: boolean) {
+      const id = await beginSession();
+      try {
+        const payload =
+          kind === "dump_path"
+            ? { ...base, isDir: selection!.is_dir, overwrite }
+            : { ...base, overwrite };
+        await invokeAction(kind, payload, id);
+      } catch (e: unknown) {
+        const msg = String(e);
+        endSession();
+        if (msg.includes("TARGET_EXISTS:") && !overwrite) {
+          const ok = await ask("Target already exists. Overwrite?", {
+            title: "Overwrite?",
+            kind: "warning",
+          });
+          if (!ok) return;
+          await attempt(true);
+          return;
+        }
+        onError?.(msg);
+        return;
+      }
+      endSession();
     }
-  }
 
-  async function onRestoreOrDump(kind: "restore_path" | "dump_path") {
-    if (!selection) return;
-    const targetDir = await pickFolder();
-    if (!targetDir) return;
-    onError?.(null);
-    setBusy(true);
-    try {
-      await invokeWithOverwrite(kind, targetDir);
-    } catch (e: unknown) {
-      onError?.(String(e));
-    } finally {
-      setBusy(false);
-    }
+    await attempt(false);
   }
 
   async function onOpen() {
     if (!selection || selection.is_dir) return;
     onError?.(null);
-    setBusy(true);
+    const id = await beginSession();
     try {
-      await invoke("open_path", {
-        repoName,
-        snapshotId,
-        path: selection.path,
-        name: selection.name,
-        isDir: false,
-      });
+      await invokeAction(
+        "open_path",
+        {
+          repoName,
+          snapshotId,
+          path: selection.path,
+          name: selection.name,
+          isDir: false,
+        },
+        id,
+      );
     } catch (e: unknown) {
       onError?.(String(e));
     } finally {
-      setBusy(false);
+      endSession();
     }
   }
 
@@ -111,14 +135,14 @@ export function FileActions({
       <button
         type="button"
         disabled={block || noSel}
-        onClick={() => void onRestoreOrDump("restore_path")}
+        onClick={() => void runRestoreOrDump("restore_path")}
       >
         Restore
       </button>
       <button
         type="button"
         disabled={block || noSel}
-        onClick={() => void onRestoreOrDump("dump_path")}
+        onClick={() => void runRestoreOrDump("dump_path")}
       >
         Dump
       </button>
@@ -129,7 +153,6 @@ export function FileActions({
       >
         Open
       </button>
-      {busy && <span className="file-actions-busy">Working…</span>}
     </div>
   );
 }

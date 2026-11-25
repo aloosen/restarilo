@@ -72,7 +72,7 @@ pub fn ensure_slot(action_id: Option<String>) -> Result<String, String> {
                 Some(Slot::Pending { id: pending }) if *pending == id => Ok(id),
                 Some(Slot::Pending { .. }) => Err("pending action id mismatch".into()),
                 Some(Slot::Running { .. }) => Err("action already running".into()),
-                None => Err(format!("no pending action for id '{id}'")),
+                None => Err(format!("CANCELLED: no pending action for id '{id}'")),
             }
         }
         None => {

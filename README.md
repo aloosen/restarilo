@@ -72,6 +72,8 @@ Manual success check (local + SFTP, snapshot without tags):
 FIX=/tmp/restarilo-z1
 mkdir -p "$FIX/data" "$FIX/my keys"
 echo hello > "$FIX/data/file.txt"
+# ~32 MiB so Restore/Dump stay busy long enough to click Cancel
+dd if=/dev/urandom of="$FIX/data/large.bin" bs=1M count=32 status=none
 ssh-keygen -t ed25519 -f "$FIX/my keys/id_ed25519" -N ""
 # add "$FIX/my keys/id_ed25519.pub" to ~/.ssh/authorized_keys for localhost SFTP
 restic -r "$FIX/local-repo" init --insecure-no-password
@@ -92,7 +94,10 @@ With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config
 
 1. Browse a snapshot, select a **file**, then Restore / Dump / Open (Open uses `restarilo-open-*` under the OS temp dir; restarilo does not clean these up).
 2. Select a **directory**, then Restore and Dump (zip). Open stays disabled.
-3. Repeat on the SFTP repo. Cancel the folder dialog → no change and no error.
+3. Folder dialog cancel → no change and no error.
+4. **In-progress Cancel** (app Cancel button or Escape, only after Working…): start Restore / Dump / Open on `large.bin`, cancel while busy — UI leaves Working… without an error toast. Restore may leave partial files under the target. Open may leave a partial `restarilo-open-*` temp.
+5. **Dump cancel with existing destination:** write known bytes to the dump target path, start Dump of `large.bin`, cancel — destination bytes unchanged; no leftover `.restarilo-dump-*` in the target folder. Overwrite confirm starts a **new** action id (Cancel enabled again for the second attempt).
+6. Repeat Cancel checks on the SFTP repo.
 
 ## Dev
 
