@@ -55,10 +55,10 @@ pub fn run() {
         let scan = state.scan.clone();
         state.scan.set_runner(Some(Arc::new(move |job| {
             let Ok(cfg) = commands::cached_config() else {
-                return subtree_scan::ScanStop::Cancelled;
+                return subtree_scan::ScanStop::Failed;
             };
             let Ok(mut cmd) = restic_cmd::prepare_restic_command(cfg, &job.repo) else {
-                return subtree_scan::ScanStop::Cancelled;
+                return subtree_scan::ScanStop::Failed;
             };
             cmd.args([
                 "ls",
@@ -71,7 +71,7 @@ pub fn run() {
             cmd.stderr(Stdio::null());
             cmd.stdin(Stdio::null());
             let Ok(child) = cmd.spawn() else {
-                return subtree_scan::ScanStop::Cancelled;
+                return subtree_scan::ScanStop::Failed;
             };
             let gen = job.generation;
             let repo = job.repo.clone();

@@ -147,6 +147,7 @@ impl ScanScheduler {
                     let kind = match stop {
                         ScanStop::Eof => ScanStatusKind::Success,
                         ScanStop::NodeBudget | ScanStop::WallTime => ScanStatusKind::StoppedBounds,
+                        ScanStop::Failed => ScanStatusKind::Failed,
                         ScanStop::Cancelled => ScanStatusKind::Idle,
                     };
                     g.status = kind;

@@ -12,6 +12,7 @@ pub enum ScanStop {
     NodeBudget,
     WallTime,
     Cancelled,
+    Failed,
 }
 
 #[derive(Deserialize)]

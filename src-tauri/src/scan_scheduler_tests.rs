@@ -131,6 +131,28 @@ fn cooldown_blocks_idle_after_bounds() {
 }
 
 #[test]
+fn cooldown_blocks_idle_after_failed() {
+    let idx = Arc::new(FolderIndex::new());
+    idx.begin(1);
+    let sched = ScanScheduler::new(idx);
+    *sched.cooldown_failed.lock().unwrap() = Duration::from_secs(60);
+    sched.set_identity("r", "s");
+    let runs = Arc::new(Mutex::new(0u32));
+    let runs2 = runs.clone();
+    sched.set_runner(Some(Arc::new(move |_| {
+        *runs2.lock().unwrap() += 1;
+        ScanStop::Failed
+    })));
+    sched.prioritize("r", "s", "/");
+    std::thread::sleep(Duration::from_millis(50));
+    assert_eq!(*runs.lock().unwrap(), 1);
+    assert_eq!(sched.status(), ScanStatusKind::Failed);
+    sched.maybe_idle_start();
+    std::thread::sleep(Duration::from_millis(30));
+    assert_eq!(*runs.lock().unwrap(), 1);
+}
+
+#[test]
 fn prioritize_uses_requested_snapshot_not_newest_identity() {
     let idx = Arc::new(FolderIndex::new());
     idx.begin(1);
