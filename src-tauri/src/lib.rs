@@ -21,6 +21,8 @@ mod tree_walk;
 
 #[cfg(test)]
 mod z1_acceptance_bench;
+#[cfg(test)]
+mod z1_click_bench;
 
 use app_state::AppState;
 use std::process::Stdio;
