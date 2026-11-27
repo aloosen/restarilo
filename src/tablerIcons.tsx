@@ -23,6 +23,7 @@ import link from "./icons/tabler/link.svg?raw";
 import music from "./icons/tabler/music.svg?raw";
 import photo from "./icons/tabler/photo.svg?raw";
 import presentation from "./icons/tabler/presentation.svg?raw";
+import search from "./icons/tabler/search.svg?raw";
 import video from "./icons/tabler/video.svg?raw";
 
 const KIND_SVG: Record<FileKind, string> = {
@@ -81,4 +82,5 @@ export const icons = {
   restore: arrowBackUp,
   export: arrowBarToDown,
   open: externalLink,
+  search,
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   SearchOverlay,
   type SearchHit,
@@ -13,6 +13,7 @@ import {
 import type { SnapshotRow } from "./SnapshotList";
 import { useOverwriteAsk } from "./useOverwriteAsk";
 import { useSearchHotkey } from "./useSearchHotkey";
+import type { useActionCancel } from "./useActionCancel";
 
 export function useSearchAppWire(opts: {
   enabled: boolean;
@@ -20,6 +21,8 @@ export function useSearchAppWire(opts: {
   snapshotId: string | null;
   snapshots: SnapshotRow[];
   actionBusy: boolean;
+  overwriteOpen: boolean;
+  cancellation: ReturnType<typeof useActionCancel>;
   onActionId: (id: string | null) => void;
   onBusyLabel: (label: string | null) => void;
   onOverwriteOpenChange?: (open: boolean) => void;
@@ -31,41 +34,48 @@ export function useSearchAppWire(opts: {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<SearchMode>("current");
   const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<SearchHit[] | null>(null);
-  const [truncated, setTruncated] = useState(false);
+  const [result, setResult] = useState<ReturnType<typeof capMatches> & {
+    repoName: string;
+    mode: SearchMode;
+  }>();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [matchesRepo, setMatchesRepo] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
 
-  const onOpen = useCallback(() => setOpen(true), []);
+  const onOpen = useCallback(() => {
+    setOpen(true);
+    input.current?.focus();
+  }, []);
   const onCloseIdle = useCallback(() => setOpen(false), []);
 
   useSearchHotkey({
     enabled: opts.enabled,
-    actionBusy: opts.actionBusy,
+    blocked: opts.actionBusy || opts.overwriteOpen || searching,
     open,
     onOpen,
     onCloseIdle,
   });
 
   useEffect(() => {
-    setMatches(null);
-    setTruncated(false);
+    setResult(undefined);
     setError(null);
     setNotice(null);
-    setMatchesRepo(null);
+    setCancelled(false);
   }, [opts.repoName]);
 
+  const q = query.trim();
+  const covered = opts.overwriteOpen || (opts.actionBusy && !searching);
+  const canSearch = opts.enabled && !covered && !searching && /[^/]/.test(q);
+
   async function onSearch() {
-    if (!opts.repoName || opts.actionBusy || searching) return;
-    const q = query.trim();
-    if (!q) return;
+    if (!canSearch) return;
     setSearching(true);
     setError(null);
     setNotice(null);
-    setMatches(null);
-    setTruncated(false);
+    setResult(undefined);
+    setCancelled(false);
     try {
       const snap = mode === "current" ? opts.snapshotId : null;
       if (mode === "current" && !snap) {
@@ -79,18 +89,13 @@ export function useSearchAppWire(opts: {
         hooks: {
           onActionId: opts.onActionId,
           onBusyLabel: opts.onBusyLabel,
-          onSuccess: () => {},
-          onError: () => {},
         },
       });
-      const capped = capMatches(all);
-      setMatches(capped.shown);
-      setTruncated(capped.truncated);
-      setMatchesRepo(opts.repoName);
+      setResult({ ...capMatches(all), repoName: opts.repoName, mode });
     } catch (e: unknown) {
       const msg = String(e);
       if (msg.includes("CANCELLED:")) {
-        setError(null);
+        setCancelled(true);
         return;
       }
       setError(msg);
@@ -100,8 +105,7 @@ export function useSearchAppWire(opts: {
   }
 
   function onExportHit(hit: SearchHit) {
-    if (opts.actionBusy || !opts.repoName) return;
-    if (matchesRepo && matchesRepo !== opts.repoName) return;
+    if (covered || searching || result?.repoName !== opts.repoName) return;
     void exportSearchHit({
       repoName: opts.repoName,
       hit,
@@ -131,8 +135,7 @@ export function useSearchAppWire(opts: {
     opts.onShowHit?.(hit);
   }
 
-  const shownMatches =
-    matches && matchesRepo === opts.repoName ? matches : null;
+  const visibleResult = result?.repoName === opts.repoName ? result : undefined;
 
   const overlay = (
     <>
@@ -140,12 +143,18 @@ export function useSearchAppWire(opts: {
         open={open}
         mode={mode}
         query={query}
-        actionBusy={opts.actionBusy}
-        matches={shownMatches}
-        truncated={truncated && shownMatches !== null}
+        covered={covered}
+        canSearch={canSearch}
+        input={input}
+        matches={visibleResult?.shown ?? null}
+        truncated={visibleResult?.truncated ?? false}
+        showSnapshotLabels={visibleResult?.mode === "all"}
         error={error}
         notice={notice}
         searching={searching}
+        cancelled={cancelled}
+        canCancel={searching && opts.actionBusy}
+        {...opts.cancellation}
         labelForSnapshot={(id) => labelForSnapshot(id, opts.snapshots)}
         onClose={onCloseIdle}
         onModeChange={setMode}
@@ -158,5 +167,5 @@ export function useSearchAppWire(opts: {
     </>
   );
 
-  return { overlay, open, setOpen };
+  return { overlay, open, searching, setOpen };
 }

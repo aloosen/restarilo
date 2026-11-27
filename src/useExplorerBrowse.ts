@@ -35,22 +35,22 @@ export function useExplorerBrowse(
   const [loading, setLoading] = useState(true);
   const [carryReady, setCarryReady] = useState(true);
   const [listEpoch, setListEpoch] = useState(0);
-  const [loadedPath, setLoadedPath] = useState<string | null>(null);
-  const [loadedIdentity, setLoadedIdentity] = useState<string | null>(null);
+  const [loadedListing, setLoadedListing] = useState<{
+    path: string; identity: string; epoch: number;
+  } | null>(null);
   const prevRepo = useRef(repoName);
   const prevSnap = useRef(snapshotId);
   const pathRef = useRef(path);
   const carryGen = useRef(0);
-  const showHitRef = useRef(showHit);
-  showHitRef.current = showHit;
   pathRef.current = path;
 
   const listingCurrent =
-    loadedPath === path && loadedIdentity === activeIdentity;
+    loadedListing?.path === path && loadedListing.identity === activeIdentity &&
+    loadedListing.epoch === listEpoch;
   const listingReady =
     carryReady && !loading && listingCurrent && !loadError && !carryError;
 
-  const pendingShow = usePendingShowHit({
+  usePendingShowHit({
     showHit,
     snapshotId,
     path,
@@ -107,67 +107,51 @@ export function useExplorerBrowse(
       prevRepo.current = repoName;
       prevSnap.current = snapshotId;
       carryGen.current += 1;
-      pendingShow.current = null;
       setPath("/");
       setCarryNote(null); setCarryError(null); setCarryRequested(null);
       setSelection(null); setEntries([]); setLoadError(null); setActionError(null);
-      setLoading(true); setLoadedPath(null); setLoadedIdentity(null); setCarryReady(true);
+      setLoading(true); setLoadedListing(null); setCarryReady(true);
       setListEpoch((n) => n + 1);
       return;
     }
-    if (prevSnap.current === snapshotId) return;
+    const snapshotChanged = prevSnap.current !== snapshotId;
     prevSnap.current = snapshotId;
-    const hit = showHitRef.current;
-    if (hit && hit.snapshotId === snapshotId) {
-      pendingShow.current = hit;
-      beginCarry(parentDirOf(hit.path));
+    if (showHit?.snapshotId === snapshotId) {
+      const parent = parentDirOf(showHit.path);
+      if (snapshotChanged || pathRef.current !== parent || !carryReady) navigateTo(parent);
       return;
     }
-    pendingShow.current = null;
-    beginCarry(pathRef.current);
-  }, [repoName, snapshotId]);
-
-  // Same-snapshot Show: open parent. Skip while a snapshot carry is in flight
-  // so we do not cancel cross-snapshot beginCarry(parent).
-  useEffect(() => {
-    if (!showHit || showHit.snapshotId !== snapshotId || !carryReady) return;
-    const parent = parentDirOf(showHit.path);
-    if (pathRef.current === parent) return;
-    navigateTo(parent);
-  }, [showHit, snapshotId, carryReady]);
+    if (snapshotChanged) beginCarry(pathRef.current);
+  }, [repoName, snapshotId, showHit]);
 
   useEffect(() => {
     if (!carryReady) return;
     let discarded = false;
     const requestedPath = path;
-    const requestedIdentity = activeIdentity;
+    const requestedListing = { path, identity: activeIdentity, epoch: listEpoch };
     const cached = peekListDir(repoName, snapshotId, requestedPath);
-    const keepSel = pendingShow.current !== null;
     if (cached) {
       setEntries(cached);
-      setLoadedPath(requestedPath);
-      setLoadedIdentity(requestedIdentity);
+      setLoadedListing(requestedListing);
       setLoadError(null);
-      if (!keepSel) setSelection(null);
+      setSelection(null);
       setLoading(false);
       return;
     }
     setLoading(true);
-    if (!keepSel) setSelection(null);
+    setSelection(null);
     setLoadError(null);
     loadListDir(repoName, snapshotId, requestedPath)
       .then((rows) => {
         if (discarded) return;
         setEntries(rows);
-        setLoadedPath(requestedPath);
-        setLoadedIdentity(requestedIdentity);
+        setLoadedListing(requestedListing);
       })
       .catch((e: unknown) => {
         if (discarded) return;
         setEntries([]);
         setLoadError(String(e));
-        setLoadedPath(requestedPath);
-        setLoadedIdentity(requestedIdentity);
+        setLoadedListing(requestedListing);
       })
       .finally(() => {
         if (!discarded) setLoading(false);
@@ -187,7 +171,11 @@ export function useExplorerBrowse(
   return {
     path, entries, selection, loadError, actionError, setActionError,
     carryNote, carryError, carryRequested, loading, carryReady, listingReady,
-    showStaleListing, navigateTo, setSelection,
+    showStaleListing, setSelection,
+    navigateTo: (next: string) => {
+      if (showHit) onShowHitConsumed?.();
+      navigateTo(next);
+    },
     retryListing: () => navigateTo(path),
     retryCarry: () => beginCarry(carryRequested ?? path),
   };

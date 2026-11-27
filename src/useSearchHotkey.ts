@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 export function useSearchHotkey(opts: {
   enabled: boolean;
-  actionBusy: boolean;
+  blocked: boolean;
   open: boolean;
   onOpen: () => void;
   onCloseIdle: () => void;
@@ -13,10 +13,10 @@ export function useSearchHotkey(opts: {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        opts.onOpen();
+        if (!opts.blocked) opts.onOpen();
         return;
       }
-      if (e.key === "Escape" && opts.open && !opts.actionBusy) {
+      if (e.key === "Escape" && opts.open && !opts.blocked && !e.defaultPrevented) {
         e.preventDefault();
         opts.onCloseIdle();
       }
@@ -25,7 +25,7 @@ export function useSearchHotkey(opts: {
     return () => window.removeEventListener("keydown", onKey);
   }, [
     opts.enabled,
-    opts.actionBusy,
+    opts.blocked,
     opts.open,
     opts.onOpen,
     opts.onCloseIdle,

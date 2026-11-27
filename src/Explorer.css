@@ -119,16 +119,21 @@
   border-top: 1px solid var(--border); background: var(--side);
   color: var(--muted); font-size: 12px;
 }
+.file-heading-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-left: auto;
+}
+.file-search-btn,
 .file-actions button {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--fg); background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 7px 10px; cursor: pointer;
+  border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit;
 }
 .file-actions button.file-actions-primary {
   color: var(--accent-ink); background: var(--accent); border-color: transparent; font-weight: 600;
 }
+.file-search-btn:disabled,
 .file-actions button:disabled { opacity: 0.52; cursor: default; }
-.file-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.file-actions { display: flex; align-items: center; gap: 6px; }
 .action-icon { color: inherit; }
 .app-success { color: var(--accent); white-space: pre-wrap; }
 .busy-dimmer {

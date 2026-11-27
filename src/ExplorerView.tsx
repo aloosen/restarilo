@@ -19,6 +19,7 @@ type Props = {
   overwriteOpen?: boolean;
   showHitRequest?: ShowHitRequest | null;
   onShowHitConsumed?: () => void;
+  onOpenSearch?: () => void;
   onActionId?: (id: string | null) => void;
   onBusyLabel?: (label: string | null) => void;
   onOverwriteOpenChange?: (open: boolean) => void;
@@ -32,6 +33,7 @@ export function ExplorerView({
   overwriteOpen = false,
   showHitRequest = null,
   onShowHitConsumed,
+  onOpenSearch,
   onActionId,
   onBusyLabel,
   onOverwriteOpenChange,
@@ -134,6 +136,7 @@ export function ExplorerView({
           listingReady={b.listingReady}
           showStaleListing={b.showStaleListing}
           loading={b.loading}
+          openingHitName={showHitRequest?.name}
           carryReady={b.carryReady}
           carryNote={b.carryNote}
           carryError={b.carryError}
@@ -146,6 +149,7 @@ export function ExplorerView({
           onBusyLabel={onBusyLabel}
           onOverwriteOpenChange={onOverwriteOpenChange}
           onActionError={b.setActionError}
+          onOpenSearch={onOpenSearch}
           onSelect={(e) =>
             b.setSelection({ path: e.path, name: e.name, is_dir: e.is_dir })
           }

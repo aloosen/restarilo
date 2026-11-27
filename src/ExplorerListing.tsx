@@ -6,6 +6,7 @@ import {
   folderHeading,
 } from "./FileListing";
 import type { DirEntry } from "./listDirCache";
+import { icons, TablerSvg } from "./tablerIcons";
 
 type Props = {
   repoName: string;
@@ -17,6 +18,7 @@ type Props = {
   listingReady: boolean;
   showStaleListing: boolean;
   loading: boolean;
+  openingHitName?: string;
   carryReady: boolean;
   carryNote: string | null;
   carryError: string | null;
@@ -25,6 +27,7 @@ type Props = {
   actionError: string | null;
   actionBusy: boolean;
   overwriteOpen?: boolean;
+  onOpenSearch?: () => void;
   onActionId?: (id: string | null) => void;
   onBusyLabel?: (label: string | null) => void;
   onOverwriteOpenChange?: (open: boolean) => void;
@@ -40,7 +43,7 @@ export function ExplorerListing(p: Props) {
   const crumbs = breadcrumbParts(p.path);
   const heading = folderHeading(p.path);
   const pending = (p.loading || !p.carryReady) && !p.carryError;
-  const showBlankLoading = pending && !p.showStaleListing;
+  const openingHit = p.openingHitName && !p.listingReady && !p.loadError && !p.carryError;
   const showListing =
     (p.listingReady || p.showStaleListing) && p.entries.length > 0;
 
@@ -87,20 +90,35 @@ export function ExplorerListing(p: Props) {
         </nav>
         <div className="file-browser-heading">
           <h2 className="file-folder-title">{heading}</h2>
-          <FileActions
-            repoName={p.repoName}
-            snapshotId={p.snapshotId}
-            snapshotLabel={p.snapshotLabel}
-            selection={p.listingReady ? p.selection : null}
-            disabled={!p.listingReady || chromeLocked}
-            actionBusy={p.actionBusy}
-            onActionId={p.onActionId}
-            onBusyLabel={p.onBusyLabel}
-            onOverwriteOpenChange={p.onOverwriteOpenChange}
-            onSuccess={setSuccess}
-            onError={p.onActionError}
-          />
+          <div className="file-heading-actions">
+            <button
+              type="button"
+              className="file-search-btn"
+              disabled={chromeLocked || !p.onOpenSearch}
+              title="Search (Ctrl+F)"
+              onClick={() => p.onOpenSearch?.()}
+            >
+              <TablerSvg svg={icons.search} className="action-icon" />
+              Search
+            </button>
+            <FileActions
+              repoName={p.repoName}
+              snapshotId={p.snapshotId}
+              snapshotLabel={p.snapshotLabel}
+              selection={p.listingReady ? p.selection : null}
+              disabled={!p.listingReady || chromeLocked}
+              actionBusy={p.actionBusy}
+              onActionId={p.onActionId}
+              onBusyLabel={p.onBusyLabel}
+              onOverwriteOpenChange={p.onOverwriteOpenChange}
+              onSuccess={setSuccess}
+              onError={p.onActionError}
+            />
+          </div>
         </div>
+        {openingHit && (
+          <p className="app-loading" role="status">Opening folder for {p.openingHitName}…</p>
+        )}
         <div
           className={
             p.showStaleListing
@@ -131,10 +149,7 @@ export function ExplorerListing(p: Props) {
           )}
           {success && <p className="app-success">{success}</p>}
           {p.actionError && <pre className="app-error">{p.actionError}</pre>}
-          {showBlankLoading && (
-            <p className="app-loading">Loading directory…</p>
-          )}
-          {p.showStaleListing && (
+          {!openingHit && (pending || p.showStaleListing) && (
             <p className="app-loading">Loading directory…</p>
           )}
           {p.listingReady && p.entries.length === 0 && (

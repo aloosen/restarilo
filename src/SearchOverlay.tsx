@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import "./SearchOverlay.css";
 
 export type SearchMode = "current" | "all";
@@ -14,12 +14,20 @@ type Props = {
   open: boolean;
   mode: SearchMode;
   query: string;
-  actionBusy: boolean;
+  covered: boolean;
+  canSearch: boolean;
+  input: RefObject<HTMLInputElement | null>;
   matches: SearchHit[] | null;
   truncated: boolean;
+  showSnapshotLabels: boolean;
   error: string | null;
   notice: string | null;
   searching: boolean;
+  cancelled: boolean;
+  canCancel: boolean;
+  cancelling: boolean;
+  cancelError?: string;
+  cancel: () => void;
   labelForSnapshot: (id: string) => string;
   onClose: () => void;
   onModeChange: (mode: SearchMode) => void;
@@ -30,16 +38,13 @@ type Props = {
 };
 
 export function SearchOverlay(p: Props) {
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!p.open || p.covered) return;
+    if (p.canCancel) cancelButton.current?.focus();
+    else if (!p.searching) p.input.current?.focus();
+  }, [p.open, p.canCancel, p.searching, p.covered, p.input]);
   if (!p.open) return null;
-
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (!p.actionBusy && !p.searching) p.onSearch();
-    }
-  }
-
-  const searchDisabled = p.actionBusy || p.searching || !p.query.trim();
 
   return (
     <div className="search-dimmer" role="presentation">
@@ -48,6 +53,7 @@ export function SearchOverlay(p: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="search-panel-title"
+        inert={p.covered}
       >
         <div className="search-panel-head">
           <h2 id="search-panel-title">Search</h2>
@@ -82,28 +88,44 @@ export function SearchOverlay(p: Props) {
             All snapshots
           </label>
         </div>
-        <div className="search-row">
+        <form className="search-row" onSubmit={(event) => {
+          event.preventDefault();
+          if (p.canSearch) p.onSearch();
+        }}>
           <input
+            ref={p.input}
             type="search"
             className="search-input"
             value={p.query}
             placeholder="File or path…"
-            autoFocus
+            aria-label="File or path"
             disabled={p.searching}
             onChange={(e) => p.onQueryChange(e.target.value)}
-            onKeyDown={onKeyDown}
           />
-          <button
-            type="button"
-            className="search-submit"
-            disabled={searchDisabled}
-            onClick={p.onSearch}
-          >
-            Search
-          </button>
-        </div>
-        <div className="search-results" aria-live="polite">
-          {p.searching && <p className="search-status">Searching…</p>}
+          {p.searching ? (
+            <button type="button" className="search-close" ref={cancelButton}
+              onClick={p.cancel} disabled={!p.canCancel || p.cancelling}>
+              Cancel
+            </button>
+          ) : (
+            <button type="submit" className="search-submit" disabled={!p.canSearch}>Search</button>
+          )}
+        </form>
+        {p.searching && (
+          <div className="search-progress" role="status">
+            <span className="search-spinner" aria-hidden="true" />
+            <div>
+              <strong>{p.cancelling ? "Cancelling search…" :
+                p.mode === "all" ? "Searching all snapshots…" : "Searching current snapshot…"}</strong>
+              {!p.cancelling && p.mode === "all" && (
+                <p className="search-status">This can take longer on remote repositories.</p>
+              )}
+            </div>
+          </div>
+        )}
+        {p.searching && p.cancelError && <p className="search-error" role="alert">{p.cancelError}</p>}
+        <div className="search-results" aria-live="polite" aria-busy={p.searching}>
+          {p.cancelled && <p className="search-status">Search cancelled.</p>}
           {!p.searching && p.notice && (
             <p className="search-notice app-success">{p.notice}</p>
           )}
@@ -132,7 +154,7 @@ export function SearchOverlay(p: Props) {
                       <span className="search-hit-path" title={hit.path}>
                         {hit.path}
                       </span>
-                      {p.mode === "all" && (
+                      {p.showSnapshotLabels && (
                         <span className="search-hit-snap">
                           {p.labelForSnapshot(hit.snapshot_id)}
                         </span>
@@ -141,14 +163,14 @@ export function SearchOverlay(p: Props) {
                     <div className="search-hit-actions">
                       <button
                         type="button"
-                        disabled={!p.onShowHit || p.actionBusy}
+                        disabled={!p.onShowHit || p.covered}
                         onClick={() => p.onShowHit?.(hit)}
                       >
                         Show
                       </button>
                       <button
                         type="button"
-                        disabled={!p.onExportHit || p.actionBusy}
+                        disabled={!p.onExportHit || p.covered}
                         onClick={() => p.onExportHit?.(hit)}
                       >
                         Export

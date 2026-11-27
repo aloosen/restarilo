@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { ArchiveMark } from "./ArchiveMark";
@@ -12,6 +12,7 @@ import type { SearchHit } from "./SearchOverlay";
 import { useSearchAppWire } from "./useSearchAppWire";
 import { useSnapshotLoad } from "./useSnapshotLoad";
 import type { ShowHitRequest } from "./usePendingShowHit";
+import { useActionCancel } from "./useActionCancel";
 
 type RepoName = { name: string };
 type HeldExplorer = {
@@ -34,6 +35,7 @@ function App() {
   const [actionFail, setActionFail] = useState<string | null>(null);
   const actionBusy = actionId !== null;
   const chromeLocked = actionBusy || overwriteOpen;
+  const cancellation = useActionCancel(actionId);
   const {
     snapshots, selectedSnapshot, snapError, shareStatus, loading,
     retryList, selectSnapshotId, prepareRepoSwitch, signIn, tryAnotherAccount,
@@ -52,26 +54,11 @@ function App() {
       });
   }, []);
 
-  const onCancel = useCallback(() => {
-    if (actionId) void invoke("cancel_action", { actionId });
-  }, [actionId]);
-
-  useEffect(() => {
-    if (!actionBusy) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [actionBusy, onCancel]);
-
   function onSelectRepo(name: string) {
     if (name === selectedRepo) return;
     clearListDirCacheForRepo(selectedRepo);
     prepareRepoSwitch();
+    setShowHitRequest(null);
     setActionSuccess(null);
     setActionFail(null);
     setSelectedRepo(name);
@@ -110,6 +97,11 @@ function App() {
       snapshots.length === 0,
   });
   function onShowHit(hit: SearchHit) {
+    if (!snapshots.some((snapshot) => snapshot.id === hit.snapshot_id)) {
+      setActionSuccess(null);
+      setActionFail("This snapshot is no longer in the snapshot list.");
+      return;
+    }
     const req: ShowHitRequest = {
       snapshotId: hit.snapshot_id,
       path: hit.path,
@@ -126,7 +118,7 @@ function App() {
     repoName: heldExplorer?.repoName ?? selectedRepo,
     snapshotId: heldExplorer?.snapshotId ?? null,
     snapshots,
-    actionBusy,
+    actionBusy, overwriteOpen, cancellation,
     onActionId: setActionId,
     onBusyLabel: setBusyLabel,
     onOverwriteOpenChange: setOverwriteOpen,
@@ -143,7 +135,7 @@ function App() {
 
   return (
     <main className="app">
-      <header className="explorer-chrome">
+      <header className="explorer-chrome" inert={search.open}>
         <div className="app-brand">
           <ArchiveMark />
           <span className="app-brand-name">restarilo</span>
@@ -164,8 +156,10 @@ function App() {
         </div>
       </header>
       {search.overlay}
-      {actionBusy && <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />}
-      <section className="explorer">
+      {actionBusy && !search.searching && (
+        <BusyModal label={busyLabel ?? "Working…"} {...cancellation} />
+      )}
+      <section className="explorer" inert={search.open}>
         {!search.open && actionSuccess && (
           <p className="app-success app-action-feedback">{actionSuccess}</p>
         )}
@@ -183,6 +177,7 @@ function App() {
               actionBusy={actionBusy || switching} overwriteOpen={overwriteOpen}
               showHitRequest={showHitRequest}
               onShowHitConsumed={() => setShowHitRequest(null)}
+              onOpenSearch={() => search.setOpen(true)}
               onActionId={setActionId} onBusyLabel={setBusyLabel}
               onOverwriteOpenChange={setOverwriteOpen}
             />

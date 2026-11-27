@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { FileSelection } from "./FileActions";
 import type { DirEntry } from "./listDirCache";
 
@@ -19,23 +19,16 @@ function selectHit(
   entries: DirEntry[],
   pending: ShowHitRequest,
   setSelection: Dispatch<SetStateAction<FileSelection | null>>,
-): boolean {
-  const entry = entries.find(
-    (e) => e.path === pending.path || e.name === pending.name,
-  );
-  if (!entry) return false;
+): void {
+  const entry = entries.find((e) => e.path === pending.path);
+  if (!entry) return;
   setSelection({
     path: entry.path,
     name: entry.name,
     is_dir: entry.is_dir,
   });
-  return true;
 }
 
-/**
- * Holds a show-hit until listingReady for that snapshot+parent, then selects.
- * Navigation is owned by useExplorerBrowse (same-snap navigate / cross-snap carry).
- */
 export function usePendingShowHit(opts: {
   showHit: ShowHitRequest | null;
   snapshotId: string;
@@ -44,31 +37,21 @@ export function usePendingShowHit(opts: {
   entries: DirEntry[];
   setSelection: Dispatch<SetStateAction<FileSelection | null>>;
   onShowHitConsumed?: () => void;
-}): { current: ShowHitRequest | null } {
-  const pendingShow = useRef<ShowHitRequest | null>(null);
-  const consumedRef = useRef(opts.onShowHitConsumed);
-  consumedRef.current = opts.onShowHitConsumed;
-
+}): void {
   useEffect(() => {
-    if (!opts.showHit || opts.showHit.snapshotId !== opts.snapshotId) return;
-    pendingShow.current = opts.showHit;
-  }, [opts.showHit, opts.snapshotId]);
-
-  useEffect(() => {
-    const pending = pendingShow.current;
+    const pending = opts.showHit;
     if (!pending || !opts.listingReady) return;
     if (pending.snapshotId !== opts.snapshotId) return;
     if (opts.path !== parentDirOf(pending.path)) return;
-    if (!selectHit(opts.entries, pending, opts.setSelection)) return;
-    pendingShow.current = null;
-    consumedRef.current?.();
+    selectHit(opts.entries, pending, opts.setSelection);
+    opts.onShowHitConsumed?.();
   }, [
+    opts.showHit,
     opts.listingReady,
     opts.entries,
     opts.path,
     opts.snapshotId,
     opts.setSelection,
+    opts.onShowHitConsumed,
   ]);
-
-  return pendingShow;
 }
