@@ -1,12 +1,15 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { normalizeTagDraft } from "./snapshotTags";
 
 type Props = {
   open: boolean;
   initialTags: string[];
   saving: boolean;
+  reloading: boolean;
+  pendingNewId: string | null;
   error: string | null;
   onSave: (tags: string[]) => void;
+  onReload: () => void;
   onCancel: () => void;
 };
 
@@ -14,33 +17,42 @@ export function SnapshotTagEditor({
   open,
   initialTags,
   saving,
+  reloading,
+  pendingNewId,
   error,
   onSave,
+  onReload,
   onCancel,
 }: Props) {
   const titleId = useId();
   const [draft, setDraft] = useState<string[]>(initialTags);
   const [input, setInput] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const wasOpen = useRef(false);
+  const busy = saving || reloading;
+  const awaitingReload = pendingNewId !== null;
 
+  // Seed draft only when the editor opens so a post-save list refresh cannot
+  // wipe the draft while we show "tags saved, snapshot not updated".
   useEffect(() => {
-    if (!open) return;
-    setDraft(initialTags);
-    setInput("");
-    setLocalError(null);
+    if (open && !wasOpen.current) {
+      setDraft(initialTags);
+      setInput("");
+      setLocalError(null);
+    }
+    wasOpen.current = open;
   }, [open, initialTags]);
 
   useEffect(() => {
-    if (!open || saving) return;
+    if (!open || busy) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      onCancel();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, saving, onCancel]);
+  }, [open, busy, onCancel]);
 
   if (!open) return null;
 
@@ -80,6 +92,7 @@ export function SnapshotTagEditor({
   }
 
   const displayError = localError ?? error;
+  const shortPending = pendingNewId ? pendingNewId.slice(0, 8) : null;
 
   return (
     <div className="busy-dimmer snap-tag-dimmer" role="presentation">
@@ -96,6 +109,14 @@ export function SnapshotTagEditor({
         {saving ? (
           <p className="snap-tag-saving" role="status">
             Saving tags…
+          </p>
+        ) : reloading ? (
+          <p className="snap-tag-saving" role="status">
+            Reloading snapshot…
+          </p>
+        ) : awaitingReload ? (
+          <p className="snap-tag-saving" role="status">
+            Tags saved. Waiting for snapshot {shortPending}…
           </p>
         ) : (
           <>
@@ -121,7 +142,7 @@ export function SnapshotTagEditor({
                 type="text"
                 value={input}
                 placeholder="New tag"
-                disabled={saving}
+                disabled={busy}
                 onChange={(e) => {
                   setInput(e.target.value);
                   setLocalError(null);
@@ -138,7 +159,7 @@ export function SnapshotTagEditor({
                 type="button"
                 className="overwrite-modal-secondary"
                 onClick={addTag}
-                disabled={!input.trim()}
+                disabled={!input.trim() || busy}
               >
                 Add
               </button>
@@ -155,18 +176,30 @@ export function SnapshotTagEditor({
             type="button"
             className="overwrite-modal-secondary"
             onClick={onCancel}
-            disabled={saving}
+            disabled={busy}
           >
             Cancel
           </button>
-          <button
-            type="button"
-            className="busy-modal-cancel"
-            onClick={save}
-            disabled={saving}
-          >
-            Save
-          </button>
+          {awaitingReload ? (
+            <button
+              type="button"
+              className="busy-modal-cancel"
+              onClick={onReload}
+              disabled={busy}
+              autoFocus
+            >
+              Reload snapshot
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="busy-modal-cancel"
+              onClick={save}
+              disabled={busy}
+            >
+              Save
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-export function useActionCancel(actionId: string | null) {
+export function useActionCancel(
+  actionId: string | null,
+  opts: { escapeEnabled?: boolean } = {},
+) {
+  const escapeEnabled = opts.escapeEnabled !== false;
   const requested = useRef<string | null>(null);
   const [status, setStatus] = useState<{ id: string; error?: string }>();
   const cancel = useCallback(() => {
@@ -18,7 +22,7 @@ export function useActionCancel(actionId: string | null) {
   }, [actionId]);
 
   useEffect(() => {
-    if (!actionId) return;
+    if (!actionId || !escapeEnabled) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -26,7 +30,7 @@ export function useActionCancel(actionId: string | null) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actionId, cancel]);
+  }, [actionId, cancel, escapeEnabled]);
 
   const current = status?.id === actionId ? status : undefined;
   return { cancel, cancelling: !!current && !current.error, cancelError: current?.error };

@@ -46,9 +46,12 @@ export function SnapshotList({
   const sorted = sortSnapshotsNewestFirst(snapshots);
   const empty = sorted.length === 0 && !listError;
   const selected = sorted.find((s) => s.id === selectedId);
+  const orphanId = selectedId && !selected ? selectedId : null;
   const selectTitle = selected
     ? formatSnapshotOption(selected).title
-    : undefined;
+    : orphanId
+      ? `${orphanId} (pending)`
+      : undefined;
 
   return (
     <div className="app-snapshot">
@@ -62,6 +65,14 @@ export function SnapshotList({
         >
           {(empty || listError) && (
             <option value="">{listError ? "Unavailable" : "No snapshots"}</option>
+          )}
+          {orphanId && (
+            <option value={orphanId}>
+              {orphanId.slice(0, 8)}… (pending)
+            </option>
+          )}
+          {!selected && !orphanId && !empty && !listError && (
+            <option value="">Select snapshot…</option>
           )}
           {sorted.map((s) => {
             const opt = formatSnapshotOption(s);

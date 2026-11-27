@@ -37,7 +37,6 @@ function App() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionFail, setActionFail] = useState<string | null>(null);
   const actionBusy = actionId !== null;
-  const cancellation = useActionCancel(actionId);
   const {
     snapshots, selectedSnapshot, snapError, shareStatus, loading,
     retryList, selectSnapshotId, refreshSelecting, prepareRepoSwitch, signIn,
@@ -67,10 +66,75 @@ function App() {
     setSelectedRepo(name);
   }
 
+  const remapSearchSnapshotId = useRef<(oldId: string, newId: string) => void>(
+    () => {},
+  );
+  const refreshTagSnapshot = useCallback(
+    async (snapshotId: string) => {
+      const refreshed = await refreshSelecting(snapshotId);
+      if (refreshed.status === "selected" || refreshed.status === "stale") {
+        return { status: "ok" as const };
+      }
+      if (refreshed.status === "missing_id") {
+        return {
+          status: "needs_reload" as const,
+          message: `Tags were saved, but snapshot ${snapshotId.slice(0, 8)}… is not in the list yet. Reload to try again.`,
+        };
+      }
+      return {
+        status: "needs_reload" as const,
+        message: `Tags were saved, but the snapshot list could not be refreshed. ${refreshed.message}`,
+      };
+    },
+    [refreshSelecting],
+  );
+
+  const onAfterTagSave = useCallback(
+    async (change: { old_snapshot_id: string; new_snapshot_id: string }) => {
+      clearListDirCacheForRepo(selectedRepo);
+      remapSearchSnapshotId.current(
+        change.old_snapshot_id,
+        change.new_snapshot_id,
+      );
+      return refreshTagSnapshot(change.new_snapshot_id);
+    },
+    [selectedRepo, refreshTagSnapshot],
+  );
+
+  const tags = useSnapshotTags({
+    repoName: selectedRepo,
+    snapshotId: selectedSnapshot?.id ?? null,
+    currentTags: selectedSnapshot?.tags ?? [],
+    actionBusy,
+    onActionId: setActionId,
+    onBusyLabel: setBusyLabel,
+    onAfterSave: onAfterTagSave,
+    onReloadSnapshot: refreshTagSnapshot,
+  });
+  const chromeLocked = actionBusy || overwriteOpen || tags.open;
+  // Escape must not cancel_action while restic tag is rewriting the snapshot.
+  const cancellation = useActionCancel(actionId, {
+    escapeEnabled: !tags.saving && !tags.reloading,
+  });
+  const snapshotSelectId =
+    selectedSnapshot?.id ?? tags.pendingNewId ?? null;
+
   const okSnap = selectedSnapshot && !snapError && !shareStatus;
-  const liveRepo = okSnap ? selectedRepo : null;
-  const liveSnapId = okSnap ? selectedSnapshot.id : null;
-  const liveSnapLabel = okSnap ? formatSnapshotLabel(selectedSnapshot) : null;
+  // Keep holding through list/network errors so FileBrowser stays mounted and
+  // the open folder survives until Reload snapshot succeeds.
+  const pendingTagHold = !!tags.pendingNewId && !shareStatus;
+  const liveRepo =
+    okSnap || pendingTagHold ? selectedRepo : null;
+  const liveSnapId = okSnap
+    ? selectedSnapshot.id
+    : pendingTagHold
+      ? tags.pendingNewId
+      : null;
+  const liveSnapLabel = okSnap
+    ? formatSnapshotLabel(selectedSnapshot)
+    : pendingTagHold && tags.pendingNewId
+      ? `${tags.pendingNewId.slice(0, 8)}…`
+      : null;
 
   useEffect(() => {
     if (liveRepo && liveSnapId && liveSnapLabel) {
@@ -81,10 +145,14 @@ function App() {
       });
       return;
     }
-    if (!loading) setHeldExplorer(null);
-  }, [liveRepo, liveSnapId, liveSnapLabel, loading]);
+    // Keep the open folder while a tag-save reload is still pending.
+    if (!loading && !tags.pendingNewId) setHeldExplorer(null);
+  }, [liveRepo, liveSnapId, liveSnapLabel, loading, tags.pendingNewId]);
 
-  const showExplorer = heldExplorer !== null && !snapError && !shareStatus;
+  const showExplorer =
+    heldExplorer !== null &&
+    !shareStatus &&
+    (!snapError || pendingTagHold);
   const switching = loading && liveSnapId === null && heldExplorer !== null;
   const zeroRepos = reposReady && !configError && repos.length === 0;
   const topDirs = selectedSnapshot
@@ -115,32 +183,6 @@ function App() {
       selectSnapshotId(hit.snapshot_id);
     }
   }
-
-  const remapSearchSnapshotId = useRef<(oldId: string, newId: string) => void>(
-    () => {},
-  );
-  const onAfterTagSave = useCallback(
-    async (change: { old_snapshot_id: string; new_snapshot_id: string }) => {
-      clearListDirCacheForRepo(selectedRepo);
-      remapSearchSnapshotId.current(
-        change.old_snapshot_id,
-        change.new_snapshot_id,
-      );
-      await refreshSelecting(change.new_snapshot_id);
-    },
-    [selectedRepo, refreshSelecting],
-  );
-
-  const tags = useSnapshotTags({
-    repoName: selectedRepo,
-    snapshotId: selectedSnapshot?.id ?? null,
-    currentTags: selectedSnapshot?.tags ?? [],
-    actionBusy,
-    onActionId: setActionId,
-    onBusyLabel: setBusyLabel,
-    onAfterSave: onAfterTagSave,
-  });
-  const chromeLocked = actionBusy || overwriteOpen || tags.open;
 
   const search = useSearchAppWire({
     enabled: showExplorer && !switching,
@@ -190,7 +232,7 @@ function App() {
             configError={configError} zeroRepos={zeroRepos} repos={repos}
             selectedRepo={selectedRepo} onSelectRepo={onSelectRepo}
             chromeLocked={chromeLocked} snapshots={snapshots}
-            selectedSnapshotId={selectedSnapshot?.id ?? null} loading={loading}
+            selectedSnapshotId={snapshotSelectId} loading={loading}
             snapError={snapError} onSelectSnapshotId={selectSnapshotId}
             onRetryList={retryList} shareStatus={shareStatus}
             onSignIn={signIn} onTryAnotherAccount={tryAnotherAccount}
@@ -202,8 +244,11 @@ function App() {
         open={tags.open}
         initialTags={selectedSnapshot?.tags ?? []}
         saving={tags.saving}
+        reloading={tags.reloading}
+        pendingNewId={tags.pendingNewId}
         error={tags.error}
         onSave={(draft) => void tags.save(draft)}
+        onReload={() => void tags.reloadPending()}
         onCancel={tags.closeEditor}
       />
       {actionBusy && !search.searching && !tags.saving && (

@@ -8,6 +8,13 @@ export type TagChange = {
   new_snapshot_id: string;
 };
 
+export type TagRefreshResult =
+  | { status: "ok" }
+  | { status: "needs_reload"; message: string };
+
+const DEFAULT_RELOAD_MSG =
+  "Tags were saved, but the updated snapshot could not be loaded yet. Reload the snapshot list to continue.";
+
 export function useSnapshotTags(opts: {
   repoName: string;
   snapshotId: string | null;
@@ -15,27 +22,32 @@ export function useSnapshotTags(opts: {
   actionBusy: boolean;
   onActionId: (id: string | null) => void;
   onBusyLabel: (label: string | null) => void;
-  onAfterSave: (change: TagChange) => Promise<void>;
+  onAfterSave: (change: TagChange) => Promise<TagRefreshResult>;
+  onReloadSnapshot: (snapshotId: string) => Promise<TagRefreshResult>;
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingNewId, setPendingNewId] = useState<string | null>(null);
 
   const openEditor = useCallback(() => {
     if (opts.actionBusy || !opts.snapshotId) return;
     setError(null);
+    setPendingNewId(null);
     setOpen(true);
   }, [opts.actionBusy, opts.snapshotId]);
 
   const closeEditor = useCallback(() => {
-    if (saving) return;
+    if (saving || reloading) return;
     setOpen(false);
     setError(null);
-  }, [saving]);
+    setPendingNewId(null);
+  }, [saving, reloading]);
 
   const save = useCallback(
     async (draft: string[]) => {
-      if (saving || !opts.snapshotId) return;
+      if (saving || reloading || pendingNewId || !opts.snapshotId) return;
       const n = normalizeTagDraft(draft);
       if (n.error) {
         setError(n.error);
@@ -48,8 +60,9 @@ export function useSnapshotTags(opts: {
       }
       setSaving(true);
       setError(null);
+      let actionId: string | null = null;
       try {
-        const actionId = await beginAction("tags", {
+        actionId = await beginAction("tags", {
           onActionId: opts.onActionId,
           onBusyLabel: opts.onBusyLabel,
           onSuccess: () => {},
@@ -59,21 +72,63 @@ export function useSnapshotTags(opts: {
           repoName: opts.repoName,
           snapshotId: opts.snapshotId,
           tags: n.tags,
+          previousTags: opts.currentTags,
           actionId,
         });
-        await opts.onAfterSave(change);
+        // Hold the new id before refresh so the explorer is not unmounted when
+        // the old snapshot disappears from the list.
+        setPendingNewId(change.new_snapshot_id);
+        const refreshed = await opts.onAfterSave(change);
+        if (refreshed.status === "needs_reload") {
+          setError(refreshed.message || DEFAULT_RELOAD_MSG);
+          return;
+        }
+        setPendingNewId(null);
         setOpen(false);
         setError(null);
       } catch (e: unknown) {
-        setError(String(e));
+        setError(String(e).replace(/^Error:\s*/i, ""));
       } finally {
+        if (actionId) {
+          void invoke("cancel_action", { actionId }).catch(() => {});
+        }
         opts.onActionId(null);
         opts.onBusyLabel(null);
         setSaving(false);
       }
     },
-    [saving, opts],
+    [saving, reloading, pendingNewId, opts],
   );
 
-  return { open, saving, error, openEditor, closeEditor, save };
+  const reloadPending = useCallback(async () => {
+    if (!pendingNewId || saving || reloading) return;
+    setReloading(true);
+    setError(null);
+    try {
+      const refreshed = await opts.onReloadSnapshot(pendingNewId);
+      if (refreshed.status === "needs_reload") {
+        setError(refreshed.message || DEFAULT_RELOAD_MSG);
+        return;
+      }
+      setPendingNewId(null);
+      setOpen(false);
+      setError(null);
+    } catch (e: unknown) {
+      setError(String(e).replace(/^Error:\s*/i, ""));
+    } finally {
+      setReloading(false);
+    }
+  }, [pendingNewId, saving, reloading, opts]);
+
+  return {
+    open,
+    saving,
+    reloading,
+    error,
+    pendingNewId,
+    openEditor,
+    closeEditor,
+    save,
+    reloadPending,
+  };
 }

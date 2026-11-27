@@ -162,25 +162,43 @@ export function useSnapshotLoad(selectedRepo: string) {
   );
 
   const refreshSelecting = useCallback(
-    async (preferId: string) => {
-      if (!selectedRepo) return null;
+    async (
+      preferId: string,
+    ): Promise<
+      | { status: "selected"; row: SnapshotRow }
+      | { status: "missing_id"; expectedId: string }
+      | { status: "failed"; message: string }
+      | { status: "stale" }
+    > => {
+      if (!selectedRepo) return { status: "failed", message: "No repository selected." };
       const token = bumpToken();
       setLoading(true);
       setSnapError(null);
       try {
         const r = await loadForRepo(selectedRepo, token, tokenRef);
-        if (token !== tokenRef.current) return null;
+        if (token !== tokenRef.current) return { status: "stale" };
         setSnapshots(r.snapshots);
-        const preferred =
-          r.snapshots.find((s) => s.id === preferId) ?? r.selected;
-        setSelectedSnapshot(preferred);
         setSnapError(r.snapError);
         setShareStatus(r.shareStatus);
-        return preferred;
+        if (r.snapError) {
+          return { status: "failed", message: r.snapError };
+        }
+        const preferred = r.snapshots.find((s) => s.id === preferId);
+        if (!preferred) {
+          // Do not fall back to the newest snapshot — tags were saved but the
+          // replacement id is missing from the refreshed list.
+          setSelectedSnapshot((current) =>
+            current && r.snapshots.some((s) => s.id === current.id) ? current : null,
+          );
+          return { status: "missing_id", expectedId: preferId };
+        }
+        setSelectedSnapshot(preferred);
+        return { status: "selected", row: preferred };
       } catch (e: unknown) {
-        if (token !== tokenRef.current) return null;
-        setSnapError(String(e));
-        return null;
+        if (token !== tokenRef.current) return { status: "stale" };
+        const message = String(e);
+        setSnapError(message);
+        return { status: "failed", message };
       } finally {
         if (token === tokenRef.current) setLoading(false);
       }
