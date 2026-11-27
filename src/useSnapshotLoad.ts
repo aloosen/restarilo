@@ -161,6 +161,33 @@ export function useSnapshotLoad(selectedRepo: string) {
     [snapshots],
   );
 
+  const refreshSelecting = useCallback(
+    async (preferId: string) => {
+      if (!selectedRepo) return null;
+      const token = bumpToken();
+      setLoading(true);
+      setSnapError(null);
+      try {
+        const r = await loadForRepo(selectedRepo, token, tokenRef);
+        if (token !== tokenRef.current) return null;
+        setSnapshots(r.snapshots);
+        const preferred =
+          r.snapshots.find((s) => s.id === preferId) ?? r.selected;
+        setSelectedSnapshot(preferred);
+        setSnapError(r.snapError);
+        setShareStatus(r.shareStatus);
+        return preferred;
+      } catch (e: unknown) {
+        if (token !== tokenRef.current) return null;
+        setSnapError(String(e));
+        return null;
+      } finally {
+        if (token === tokenRef.current) setLoading(false);
+      }
+    },
+    [selectedRepo, bumpToken],
+  );
+
   const prepareRepoSwitch = useCallback(() => {
     bumpToken();
     setSelectedSnapshot(null);
@@ -178,6 +205,7 @@ export function useSnapshotLoad(selectedRepo: string) {
     loading,
     retryList,
     selectSnapshotId,
+    refreshSelecting,
     prepareRepoSwitch,
     signIn: () => void runSignIn(false),
     tryAnotherAccount: () => void runSignIn(true),

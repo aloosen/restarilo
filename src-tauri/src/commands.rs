@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::{restic_actions, restic_bin, restic_killable};
+use crate::{restic_actions, restic_bin, restic_killable, restic_tag};
 use serde::Serialize;
 use std::process::Command;
 use std::sync::OnceLock;

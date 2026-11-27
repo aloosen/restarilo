@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { ArchiveMark } from "./ArchiveMark";
@@ -9,8 +9,11 @@ import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import { explorerEmptyMessage } from "./explorerEmptyMessage";
 import type { SearchHit } from "./SearchOverlay";
+import { SnapshotTagChips } from "./SnapshotTagChips";
+import { SnapshotTagEditor } from "./SnapshotTagEditor";
 import { useSearchAppWire } from "./useSearchAppWire";
 import { useSnapshotLoad } from "./useSnapshotLoad";
+import { useSnapshotTags } from "./useSnapshotTags";
 import type { ShowHitRequest } from "./usePendingShowHit";
 import { useActionCancel } from "./useActionCancel";
 
@@ -34,11 +37,11 @@ function App() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionFail, setActionFail] = useState<string | null>(null);
   const actionBusy = actionId !== null;
-  const chromeLocked = actionBusy || overwriteOpen;
   const cancellation = useActionCancel(actionId);
   const {
     snapshots, selectedSnapshot, snapError, shareStatus, loading,
-    retryList, selectSnapshotId, prepareRepoSwitch, signIn, tryAnotherAccount,
+    retryList, selectSnapshotId, refreshSelecting, prepareRepoSwitch, signIn,
+    tryAnotherAccount,
   } = useSnapshotLoad(selectedRepo);
 
   useEffect(() => {
@@ -113,12 +116,41 @@ function App() {
     }
   }
 
+  const remapSearchSnapshotId = useRef<(oldId: string, newId: string) => void>(
+    () => {},
+  );
+  const onAfterTagSave = useCallback(
+    async (change: { old_snapshot_id: string; new_snapshot_id: string }) => {
+      clearListDirCacheForRepo(selectedRepo);
+      remapSearchSnapshotId.current(
+        change.old_snapshot_id,
+        change.new_snapshot_id,
+      );
+      await refreshSelecting(change.new_snapshot_id);
+    },
+    [selectedRepo, refreshSelecting],
+  );
+
+  const tags = useSnapshotTags({
+    repoName: selectedRepo,
+    snapshotId: selectedSnapshot?.id ?? null,
+    currentTags: selectedSnapshot?.tags ?? [],
+    actionBusy,
+    onActionId: setActionId,
+    onBusyLabel: setBusyLabel,
+    onAfterSave: onAfterTagSave,
+  });
+  const chromeLocked = actionBusy || overwriteOpen || tags.open;
+
   const search = useSearchAppWire({
     enabled: showExplorer && !switching,
     repoName: heldExplorer?.repoName ?? selectedRepo,
     snapshotId: heldExplorer?.snapshotId ?? null,
     snapshots,
-    actionBusy, overwriteOpen, cancellation,
+    actionBusy,
+    overwriteOpen,
+    uiBlocked: tags.open,
+    cancellation,
     onActionId: setActionId,
     onBusyLabel: setBusyLabel,
     onOverwriteOpenChange: setOverwriteOpen,
@@ -132,16 +164,26 @@ function App() {
     },
     onShowHit,
   });
+  remapSearchSnapshotId.current = search.remapSnapshotId;
 
   return (
     <main className="app">
-      <header className="explorer-chrome" inert={search.open}>
+      <header className="explorer-chrome" inert={search.open || tags.open}>
         <div className="app-brand">
           <ArchiveMark />
           <span className="app-brand-name">restarilo</span>
         </div>
-        <div className="app-chrome-paths" title={selectedSnapshot?.paths?.join("\n")} aria-live="polite">
-          {topDirs || "\u00a0"}
+        <div className="app-chrome-center">
+          <div className="app-chrome-paths" title={selectedSnapshot?.paths?.join("\n")} aria-live="polite">
+            {topDirs || "\u00a0"}
+          </div>
+          {okSnap && (
+            <SnapshotTagChips
+              tags={selectedSnapshot.tags}
+              disabled={chromeLocked && !tags.open}
+              onOpenEditor={tags.openEditor}
+            />
+          )}
         </div>
         <div className="app-chrome-controls">
           <ExplorerChromeControls
@@ -156,14 +198,22 @@ function App() {
         </div>
       </header>
       {search.overlay}
-      {actionBusy && !search.searching && (
+      <SnapshotTagEditor
+        open={tags.open}
+        initialTags={selectedSnapshot?.tags ?? []}
+        saving={tags.saving}
+        error={tags.error}
+        onSave={(draft) => void tags.save(draft)}
+        onCancel={tags.closeEditor}
+      />
+      {actionBusy && !search.searching && !tags.saving && (
         <BusyModal label={busyLabel ?? "Working…"} {...cancellation} />
       )}
-      <section className="explorer" inert={search.open}>
-        {!search.open && actionSuccess && (
+      <section className="explorer" inert={search.open || tags.open}>
+        {!search.open && !tags.open && actionSuccess && (
           <p className="app-success app-action-feedback">{actionSuccess}</p>
         )}
-        {!search.open && actionFail && (
+        {!search.open && !tags.open && actionFail && (
           <pre className="app-error app-action-feedback">{actionFail}</pre>
         )}
         {showExplorer && heldExplorer ? (

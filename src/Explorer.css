@@ -10,11 +10,52 @@
   border-radius: 9px; background: var(--accent); color: var(--accent-ink);
 }
 .app-brand-name { font-size: 17px; font-weight: 650; letter-spacing: -0.035em; }
-.app-chrome-paths {
-  justify-self: center; text-align: center; font-size: 13px; color: var(--muted);
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; padding: 0 8px;
+.app-chrome-center {
+  justify-self: center; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; min-width: 0; max-width: 100%; padding: 0 8px;
 }
+.app-chrome-paths {
+  text-align: center; font-size: 13px; color: var(--muted);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.snap-tag-chips {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: 6px; max-width: 100%;
+}
+.snap-tag-chip,
+.snap-tag-more,
+.snap-tag-add {
+  appearance: none; border: 1px solid var(--border); background: var(--side);
+  color: var(--fg); border-radius: 999px; padding: 2px 10px; font: inherit;
+  font-size: 12px; cursor: pointer; max-width: 12rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.snap-tag-add { color: var(--accent); background: transparent; }
+.snap-tag-more { color: var(--accent); font-weight: 650; }
+.snap-tag-chip:disabled,
+.snap-tag-more:disabled,
+.snap-tag-add:disabled { opacity: 0.52; cursor: default; }
+.snap-tag-dimmer { z-index: 60; }
+.snap-tag-editor { text-align: left; }
+.snap-tag-saving { margin: 0 0 14px; color: var(--muted); }
+.snap-tag-editor-list {
+  list-style: none; margin: 0 0 12px; padding: 0;
+  display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow: auto;
+}
+.snap-tag-editor-empty { color: var(--muted); font-size: 13px; }
+.snap-tag-editor-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.snap-tag-editor-name { min-width: 0; overflow-wrap: anywhere; }
+.snap-tag-editor-add {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.snap-tag-editor-add input {
+  flex: 1; min-width: 0; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font: inherit;
+}
+.snap-tag-editor-error { margin: 0 0 12px; }
 .app-chrome-controls {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
   gap: 8px 14px; justify-self: end; min-width: 0;
@@ -30,7 +71,8 @@
   .explorer-chrome {
     grid-template-columns: 1fr; justify-items: stretch;
   }
-  .app-brand, .app-chrome-paths, .app-chrome-controls { justify-self: stretch; text-align: left; }
+  .app-brand, .app-chrome-center, .app-chrome-controls { justify-self: stretch; text-align: left; }
+  .app-chrome-center { align-items: flex-start; }
   .app-chrome-controls { justify-content: flex-start; }
 }
 .explorer {

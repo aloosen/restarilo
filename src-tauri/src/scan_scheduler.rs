@@ -109,6 +109,17 @@ impl ScanScheduler {
         g.snapshot_id = snapshot_id.into();
         g.preferred_root = "/".into();
     }
+
+    /// Stop a running background scan and drop any pending restart.
+    pub fn cancel_running(&self) {
+        let mut g = self.inner.lock().unwrap();
+        g.cancel.store(true, Ordering::SeqCst);
+        g.pending_root = None;
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.inner.lock().unwrap().running
+    }
 }
 
 pub struct ScanUserGuard(Arc<ScanScheduler>);

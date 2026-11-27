@@ -12,6 +12,7 @@ mod restic_bin;
 mod restic_cmd;
 mod restic_find;
 mod restic_killable;
+mod restic_tag;
 mod restic_ls;
 mod restic_tree;
 mod scan_scheduler;
@@ -125,6 +126,7 @@ pub fn run() {
             commands::dump_path,
             commands::open_path,
             commands::find_paths,
+            commands::set_snapshot_tags,
             folder_debug::folder_debug_path,
             folder_debug::folder_debug_fe
         ])

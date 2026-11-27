@@ -22,6 +22,8 @@ export function useSearchAppWire(opts: {
   snapshots: SnapshotRow[];
   actionBusy: boolean;
   overwriteOpen: boolean;
+  /** Extra UI lock (e.g. tag editor) — blocks search hotkey and actions. */
+  uiBlocked?: boolean;
   cancellation: ReturnType<typeof useActionCancel>;
   onActionId: (id: string | null) => void;
   onBusyLabel: (label: string | null) => void;
@@ -50,9 +52,10 @@ export function useSearchAppWire(opts: {
   }, []);
   const onCloseIdle = useCallback(() => setOpen(false), []);
 
+  const uiBlocked = !!opts.uiBlocked;
   useSearchHotkey({
     enabled: opts.enabled,
-    blocked: opts.actionBusy || opts.overwriteOpen || searching,
+    blocked: opts.actionBusy || opts.overwriteOpen || uiBlocked || searching,
     open,
     onOpen,
     onCloseIdle,
@@ -66,7 +69,8 @@ export function useSearchAppWire(opts: {
   }, [opts.repoName]);
 
   const q = query.trim();
-  const covered = opts.overwriteOpen || (opts.actionBusy && !searching);
+  const covered =
+    opts.overwriteOpen || uiBlocked || (opts.actionBusy && !searching);
   const canSearch = opts.enabled && !covered && !searching && /[^/]/.test(q);
 
   async function onSearch() {
@@ -135,6 +139,19 @@ export function useSearchAppWire(opts: {
     opts.onShowHit?.(hit);
   }
 
+  const remapSnapshotId = useCallback((oldId: string, newId: string) => {
+    if (oldId === newId) return;
+    setResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        shown: prev.shown.map((h) =>
+          h.snapshot_id === oldId ? { ...h, snapshot_id: newId } : h,
+        ),
+      };
+    });
+  }, []);
+
   const visibleResult = result?.repoName === opts.repoName ? result : undefined;
 
   const overlay = (
@@ -167,5 +184,5 @@ export function useSearchAppWire(opts: {
     </>
   );
 
-  return { overlay, open, searching, setOpen };
+  return { overlay, open, searching, setOpen, remapSnapshotId };
 }
