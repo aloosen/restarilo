@@ -96,10 +96,22 @@ pub fn parse_tag_change_json(stdout: &str, expected_old: &str) -> Result<TagChan
     }
 }
 
-fn build_tag_args<'a>(snapshot_id: &'a str, tags: &'a [String]) -> Vec<&'a str> {
+/// Build `restic tag` args. Clearing all tags uses `--remove` for each previous
+/// tag: restic 0.19.1 treats `--set ""` as a no-op (`changed_snapshots: 0`).
+pub fn build_tag_args<'a>(
+    snapshot_id: &'a str,
+    tags: &'a [String],
+    previous_tags: &'a [String],
+) -> Result<Vec<&'a str>, String> {
     let mut args = vec!["tag", "--json"];
     if tags.is_empty() {
-        args.extend(["--set", ""]);
+        if previous_tags.is_empty() {
+            return Err("no tags to remove".into());
+        }
+        for tag in previous_tags {
+            args.push("--remove");
+            args.push(tag.as_str());
+        }
     } else {
         for tag in tags {
             args.push("--set");
@@ -107,7 +119,7 @@ fn build_tag_args<'a>(snapshot_id: &'a str, tags: &'a [String]) -> Vec<&'a str> 
         }
     }
     args.push(snapshot_id);
-    args
+    Ok(args)
 }
 
 pub fn set_snapshot_tags(
@@ -115,13 +127,16 @@ pub fn set_snapshot_tags(
     repo_name: &str,
     snapshot_id: &str,
     tags: Vec<String>,
+    previous_tags: Vec<String>,
     action_id: Option<String>,
 ) -> Result<TagChange, String> {
-    validate_full_snapshot_id(snapshot_id)?;
-    let tags = normalize_tags(&tags)?;
+    // Reserve the slot before any fallible work so every exit path can release it.
     let id = ensure_slot(action_id)?;
     let result = (|| {
-        let args = build_tag_args(snapshot_id, &tags);
+        validate_full_snapshot_id(snapshot_id)?;
+        let tags = normalize_tags(&tags)?;
+        let previous = normalize_tags(&previous_tags)?;
+        let args = build_tag_args(snapshot_id, &tags, &previous)?;
         let stdout = run_restic_killable(cfg, repo_name, &args, &id)?;
         parse_tag_change_json(&stdout, snapshot_id)
     })();
@@ -182,16 +197,36 @@ mod tests {
     }
 
     #[test]
-    fn build_args_empty_and_multi() {
+    fn build_args_clear_uses_remove() {
         let id = "a".repeat(64);
+        let previous = vec!["one".into(), "two".into()];
         assert_eq!(
-            build_tag_args(&id, &[]),
-            vec!["tag", "--json", "--set", "", id.as_str()]
+            build_tag_args(&id, &[], &previous).unwrap(),
+            vec![
+                "tag",
+                "--json",
+                "--remove",
+                "one",
+                "--remove",
+                "two",
+                id.as_str()
+            ]
         );
+    }
+
+    #[test]
+    fn build_args_set_multi() {
+        let id = "a".repeat(64);
         let tags = vec!["one".into(), "two".into()];
         assert_eq!(
-            build_tag_args(&id, &tags),
+            build_tag_args(&id, &tags, &[]).unwrap(),
             vec!["tag", "--json", "--set", "one", "--set", "two", id.as_str()]
         );
+    }
+
+    #[test]
+    fn build_args_clear_without_previous_fails() {
+        let id = "a".repeat(64);
+        assert!(build_tag_args(&id, &[], &[]).is_err());
     }
 }

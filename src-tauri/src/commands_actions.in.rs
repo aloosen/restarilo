@@ -60,11 +60,17 @@ pub async fn set_snapshot_tags(
     repo_name: String,
     snapshot_id: String,
     tags: Vec<String>,
+    previous_tags: Vec<String>,
     action_id: Option<String>,
 ) -> Result<restic_tag::TagChange, String> {
     let scan = state.scan.clone();
     let prefetch = state.prefetch.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let release_if_pending = |aid: &Option<String>| {
+            if let Some(id) = aid {
+                restic_killable::release_action(id);
+            }
+        };
         scan.cancel_running();
         let _scan = scan.scan_user_guard();
         let _prefetch = prefetch.user_guard();
@@ -73,10 +79,24 @@ pub async fn set_snapshot_tags(
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         if scan.is_running() {
+            release_if_pending(&action_id);
             return Err("background repository scan still running; try again".into());
         }
-        let cfg = cached_config()?;
-        restic_tag::set_snapshot_tags(cfg, &repo_name, &snapshot_id, tags, action_id)
+        let cfg = match cached_config() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                release_if_pending(&action_id);
+                return Err(e);
+            }
+        };
+        restic_tag::set_snapshot_tags(
+            cfg,
+            &repo_name,
+            &snapshot_id,
+            tags,
+            previous_tags,
+            action_id,
+        )
     })
     .await
     .map_err(|e| format!("set_snapshot_tags task failed: {e}"))?
