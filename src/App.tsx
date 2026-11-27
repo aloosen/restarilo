@@ -5,10 +5,12 @@ import { ArchiveMark } from "./ArchiveMark";
 import { BusyModal } from "./BusyModal";
 import { ExplorerChromeControls } from "./ExplorerChromeControls";
 import { FileBrowser } from "./FileBrowser";
-import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
+import { formatSnapshotLabel } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import { explorerEmptyMessage } from "./explorerEmptyMessage";
 import type { SearchHit } from "./SearchOverlay";
+import { SnapshotPathsHeader } from "./SnapshotPathsHeader";
+import { SnapshotPathsPanel } from "./SnapshotPathsPanel";
 import { SnapshotTagChips } from "./SnapshotTagChips";
 import { SnapshotTagEditor } from "./SnapshotTagEditor";
 import { useSearchAppWire } from "./useSearchAppWire";
@@ -36,6 +38,7 @@ function App() {
   const [showHitRequest, setShowHitRequest] = useState<ShowHitRequest | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionFail, setActionFail] = useState<string | null>(null);
+  const [pathsOpen, setPathsOpen] = useState(false);
   const actionBusy = actionId !== null;
   const {
     snapshots, selectedSnapshot, snapError, shareStatus, loading,
@@ -114,10 +117,14 @@ function App() {
   const chromeLocked = actionBusy || overwriteOpen || tags.open;
   // Escape must not cancel_action while restic tag is rewriting the snapshot.
   const cancellation = useActionCancel(actionId, {
-    escapeEnabled: !tags.saving && !tags.reloading,
+    escapeEnabled: !tags.saving && !tags.reloading && !pathsOpen,
   });
   const snapshotSelectId =
     selectedSnapshot?.id ?? tags.pendingNewId ?? null;
+
+  useEffect(() => {
+    if (!selectedSnapshot) setPathsOpen(false);
+  }, [selectedSnapshot]);
 
   const okSnap = selectedSnapshot && !snapError && !shareStatus;
   // Keep holding through list/network errors so FileBrowser stays mounted and
@@ -155,9 +162,6 @@ function App() {
     (!snapError || pendingTagHold);
   const switching = loading && liveSnapId === null && heldExplorer !== null;
   const zeroRepos = reposReady && !configError && repos.length === 0;
-  const topDirs = selectedSnapshot
-    ? formatSnapshotTopDirs(selectedSnapshot.paths)
-    : "";
   const emptyMsg = explorerEmptyMessage({
     configError,
     zeroRepos,
@@ -191,7 +195,7 @@ function App() {
     snapshots,
     actionBusy,
     overwriteOpen,
-    uiBlocked: tags.open,
+    uiBlocked: tags.open || pathsOpen,
     cancellation,
     onActionId: setActionId,
     onBusyLabel: setBusyLabel,
@@ -208,17 +212,22 @@ function App() {
   });
   remapSearchSnapshotId.current = search.remapSnapshotId;
 
+  const headerBlocking = search.open || tags.open;
+  const explorerBlocking = headerBlocking || pathsOpen;
+
   return (
     <main className="app">
-      <header className="explorer-chrome" inert={search.open || tags.open}>
+      <header className="explorer-chrome" inert={headerBlocking}>
         <div className="app-brand">
           <ArchiveMark />
           <span className="app-brand-name">restarilo</span>
         </div>
         <div className="app-chrome-center">
-          <div className="app-chrome-paths" title={selectedSnapshot?.paths?.join("\n")} aria-live="polite">
-            {topDirs || "\u00a0"}
-          </div>
+          <SnapshotPathsHeader
+            paths={selectedSnapshot?.paths ?? []}
+            disabled={chromeLocked}
+            onOpenPanel={() => setPathsOpen(true)}
+          />
           {okSnap && (
             <SnapshotTagChips
               tags={selectedSnapshot.tags}
@@ -240,6 +249,11 @@ function App() {
         </div>
       </header>
       {search.overlay}
+      <SnapshotPathsPanel
+        open={pathsOpen}
+        paths={selectedSnapshot?.paths ?? []}
+        onClose={() => setPathsOpen(false)}
+      />
       <SnapshotTagEditor
         open={tags.open}
         initialTags={selectedSnapshot?.tags ?? []}
@@ -254,11 +268,11 @@ function App() {
       {actionBusy && !search.searching && !tags.saving && (
         <BusyModal label={busyLabel ?? "Working…"} {...cancellation} />
       )}
-      <section className="explorer" inert={search.open || tags.open}>
-        {!search.open && !tags.open && actionSuccess && (
+      <section className="explorer" inert={explorerBlocking}>
+        {!explorerBlocking && actionSuccess && (
           <p className="app-success app-action-feedback">{actionSuccess}</p>
         )}
-        {!search.open && !tags.open && actionFail && (
+        {!explorerBlocking && actionFail && (
           <pre className="app-error app-action-feedback">{actionFail}</pre>
         )}
         {showExplorer && heldExplorer ? (

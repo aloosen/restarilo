@@ -75,15 +75,3 @@ export function formatSnapshotOption(s: {
   return { text, title };
 }
 
-/** Top-level backup paths from the snapshot for header chrome. */
-export function formatSnapshotTopDirs(paths: string[] | null | undefined): string {
-  if (!paths || paths.length === 0) return "";
-  return paths
-    .map((p) => {
-      const trimmed = p.replace(/\/+$/, "");
-      if (!trimmed || trimmed === "/") return "/";
-      const segs = trimmed.split("/").filter(Boolean);
-      return segs[segs.length - 1] ?? trimmed;
-    })
-    .join(" · ");
-}
