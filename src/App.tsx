@@ -8,8 +8,10 @@ import { FileBrowser } from "./FileBrowser";
 import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import { explorerEmptyMessage } from "./explorerEmptyMessage";
+import type { SearchHit } from "./SearchOverlay";
 import { useSearchAppWire } from "./useSearchAppWire";
 import { useSnapshotLoad } from "./useSnapshotLoad";
+import type { ShowHitRequest } from "./usePendingShowHit";
 
 type RepoName = { name: string };
 type HeldExplorer = {
@@ -27,6 +29,7 @@ function App() {
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [heldExplorer, setHeldExplorer] = useState<HeldExplorer | null>(null);
+  const [showHitRequest, setShowHitRequest] = useState<ShowHitRequest | null>(null);
   const actionBusy = actionId !== null;
   const chromeLocked = actionBusy || overwriteOpen;
   const {
@@ -102,6 +105,18 @@ function App() {
       !loading && !snapError && !shareStatus && !!selectedRepo &&
       snapshots.length === 0,
   });
+  function onShowHit(hit: SearchHit) {
+    const req: ShowHitRequest = {
+      snapshotId: hit.snapshot_id,
+      path: hit.path,
+      name: hit.name,
+    };
+    setShowHitRequest(req);
+    if (hit.snapshot_id !== heldExplorer?.snapshotId) {
+      selectSnapshotId(hit.snapshot_id);
+    }
+  }
+
   const search = useSearchAppWire({
     enabled: showExplorer && !switching,
     repoName: heldExplorer?.repoName ?? selectedRepo,
@@ -110,6 +125,8 @@ function App() {
     actionBusy,
     onActionId: setActionId,
     onBusyLabel: setBusyLabel,
+    onOverwriteOpenChange: setOverwriteOpen,
+    onShowHit,
   });
 
   return (
@@ -146,6 +163,8 @@ function App() {
               repoName={heldExplorer.repoName} snapshotId={heldExplorer.snapshotId}
               snapshotLabel={heldExplorer.snapshotLabel}
               actionBusy={actionBusy || switching} overwriteOpen={overwriteOpen}
+              showHitRequest={showHitRequest}
+              onShowHitConsumed={() => setShowHitRequest(null)}
               onActionId={setActionId} onBusyLabel={setBusyLabel}
               onOverwriteOpenChange={setOverwriteOpen}
             />

@@ -1,17 +1,12 @@
-import {
-  joinTarget,
-  successMessage,
-  targetFromExistsError,
-  type ActionKind,
-} from "./actionFeedback";
+import { successMessage } from "./actionFeedback";
 import {
   beginAction,
   invokeAction,
-  pickFolder,
   selectionIdentityMatches,
   type FileSelection,
 } from "./fileActionInvoke";
 import { FileActionButtons } from "./FileActionButtons";
+import { runRestoreOrDump } from "./pathActionRun";
 import { useOverwriteAsk } from "./useOverwriteAsk";
 
 export type { FileSelection };
@@ -38,6 +33,7 @@ export function FileActions(p: Props) {
     onError: p.onError,
     onActionId: p.onActionId,
     onBusyLabel: p.onBusyLabel,
+    onOverwriteOpenChange: p.onOverwriteOpenChange,
   };
 
   function end() {
@@ -45,89 +41,24 @@ export function FileActions(p: Props) {
     p.onBusyLabel?.(null);
   }
 
-  function matches(frozen: {
-    repoName: string;
-    snapshotId: string;
-    selection: FileSelection;
-  }) {
-    return selectionIdentityMatches(
-      { repoName: p.repoName, snapshotId: p.snapshotId, selection: p.selection },
-      frozen,
-    );
-  }
-
-  async function runRestoreOrDump(cmd: "restore_path" | "dump_path") {
+  async function onRestoreOrDump(cmd: "restore_path" | "dump_path") {
     if (!p.selection) return;
-    const frozen = {
-      repoName: p.repoName,
-      snapshotId: p.snapshotId,
-      snapshotLabel: p.snapshotLabel,
-      selection: { ...p.selection },
-    };
-    const targetDir = await pickFolder();
-    if (!targetDir) return;
-    if (!matches(frozen)) return;
-
-    const kind: ActionKind = cmd === "restore_path" ? "restore" : "export";
-    const expected = joinTarget(
-      targetDir,
-      frozen.selection.name,
-      cmd === "dump_path" && frozen.selection.is_dir,
-    );
-    const base = {
-      repoName: frozen.repoName,
-      snapshotId: frozen.snapshotId,
-      path: frozen.selection.path,
-      name: frozen.selection.name,
-      targetDir,
-    };
-
-    async function attempt(overwrite: boolean) {
-      if (!matches(frozen)) return;
-      let id: string;
-      try {
-        id = await beginAction(kind, hooks);
-      } catch (e: unknown) {
-        p.onError?.(String(e));
-        return;
-      }
-      try {
-        const payload =
-          cmd === "dump_path"
-            ? { ...base, isDir: frozen.selection.is_dir, overwrite }
-            : { ...base, overwrite };
-        const dest = await invokeAction(cmd, payload, id, () => {
-          p.onSuccess?.(null);
-          p.onError?.(null);
-        });
-        p.onSuccess?.(successMessage(kind, dest || expected));
-      } catch (e: unknown) {
-        const msg = String(e);
-        end();
-        if (msg.includes("CANCELLED:")) return;
-        if (msg.includes("TARGET_EXISTS:") && !overwrite) {
-          p.onOverwriteOpenChange?.(true);
-          let ok = false;
-          try {
-            ok = await askOverwrite({
-              sourcePath: frozen.selection.path,
-              snapshotLabel: frozen.snapshotLabel,
-              targetPath: targetFromExistsError(msg) ?? expected,
-            });
-          } finally {
-            p.onOverwriteOpenChange?.(false);
-          }
-          if (!ok || !matches(frozen)) return;
-          await attempt(true);
-          return;
-        }
-        p.onError?.(msg);
-        return;
-      }
-      end();
-    }
-
-    await attempt(false);
+    await runRestoreOrDump({
+      cmd,
+      frozen: {
+        repoName: p.repoName,
+        snapshotId: p.snapshotId,
+        snapshotLabel: p.snapshotLabel,
+        selection: { ...p.selection },
+      },
+      live: {
+        repoName: p.repoName,
+        snapshotId: p.snapshotId,
+        selection: p.selection,
+      },
+      hooks,
+      askOverwrite,
+    });
   }
 
   async function onOpen() {
@@ -145,7 +76,14 @@ export function FileActions(p: Props) {
       return;
     }
     try {
-      if (!matches(frozen)) return;
+      if (
+        !selectionIdentityMatches(
+          { repoName: p.repoName, snapshotId: p.snapshotId, selection: p.selection },
+          frozen,
+        )
+      ) {
+        return;
+      }
       const dest = await invokeAction(
         "open_path",
         {
@@ -176,8 +114,8 @@ export function FileActions(p: Props) {
       <FileActionButtons
         disabled={noSel}
         openDisabled={noSel || !!p.selection?.is_dir}
-        onRestore={() => void runRestoreOrDump("restore_path")}
-        onExport={() => void runRestoreOrDump("dump_path")}
+        onRestore={() => void onRestoreOrDump("restore_path")}
+        onExport={() => void onRestoreOrDump("dump_path")}
         onOpen={() => void onOpen()}
       />
       {modal}

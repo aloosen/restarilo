@@ -3,8 +3,10 @@ import { ExplorerListing } from "./ExplorerListing";
 import { FolderTree } from "./FolderTree";
 import type { DirEntry } from "./listDirCache";
 import { useExplorerBrowse } from "./useExplorerBrowse";
+import type { ShowHitRequest } from "./usePendingShowHit";
 
 export type { DirEntry };
+export type { ShowHitRequest };
 
 const TREE_MIN = 128;
 const TREE_DEFAULT = 224;
@@ -15,6 +17,8 @@ type Props = {
   snapshotLabel: string;
   actionBusy?: boolean;
   overwriteOpen?: boolean;
+  showHitRequest?: ShowHitRequest | null;
+  onShowHitConsumed?: () => void;
   onActionId?: (id: string | null) => void;
   onBusyLabel?: (label: string | null) => void;
   onOverwriteOpenChange?: (open: boolean) => void;
@@ -26,11 +30,18 @@ export function ExplorerView({
   snapshotLabel,
   actionBusy = false,
   overwriteOpen = false,
+  showHitRequest = null,
+  onShowHitConsumed,
   onActionId,
   onBusyLabel,
   onOverwriteOpenChange,
 }: Props) {
-  const b = useExplorerBrowse(repoName, snapshotId);
+  const b = useExplorerBrowse(
+    repoName,
+    snapshotId,
+    showHitRequest,
+    onShowHitConsumed,
+  );
   const [treeWidth, setTreeWidth] = useState(TREE_DEFAULT);
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const drag = useRef<{ startX: number; startW: number } | null>(null);

@@ -8,8 +8,21 @@ import {
   type CarryResult,
   type DirEntry,
 } from "./listDirCache";
+import {
+  parentDirOf,
+  usePendingShowHit,
+  type ShowHitRequest,
+} from "./usePendingShowHit";
 
-export function useExplorerBrowse(repoName: string, snapshotId: string) {
+export type { ShowHitRequest };
+export { parentDirOf };
+
+export function useExplorerBrowse(
+  repoName: string,
+  snapshotId: string,
+  showHit: ShowHitRequest | null = null,
+  onShowHitConsumed?: () => void,
+) {
   const activeIdentity = `${repoName}\0${snapshotId}`;
   const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<DirEntry[]>([]);
@@ -28,7 +41,33 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
   const prevSnap = useRef(snapshotId);
   const pathRef = useRef(path);
   const carryGen = useRef(0);
+  const showHitRef = useRef(showHit);
+  showHitRef.current = showHit;
   pathRef.current = path;
+
+  const listingCurrent =
+    loadedPath === path && loadedIdentity === activeIdentity;
+  const listingReady =
+    carryReady && !loading && listingCurrent && !loadError && !carryError;
+
+  const pendingShow = usePendingShowHit({
+    showHit,
+    snapshotId,
+    path,
+    pathRef,
+    listingReady,
+    entries,
+    setPath,
+    setSelection,
+    setListEpoch,
+    setCarryReady,
+    setCarryNote,
+    setCarryError,
+    setCarryRequested,
+    setLoadError,
+    carryGen,
+    onShowHitConsumed,
+  });
 
   function applyCarry(gen: number, r: CarryResult) {
     if (gen !== carryGen.current) return;
@@ -66,23 +105,23 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
       prevRepo.current = repoName;
       prevSnap.current = snapshotId;
       carryGen.current += 1;
+      pendingShow.current = null;
       setPath("/");
-      setCarryNote(null);
-      setCarryError(null);
-      setCarryRequested(null);
-      setSelection(null);
-      setEntries([]);
-      setLoadError(null);
-      setActionError(null);
-      setLoading(true);
-      setLoadedPath(null);
-      setLoadedIdentity(null);
-      setCarryReady(true);
+      setCarryNote(null); setCarryError(null); setCarryRequested(null);
+      setSelection(null); setEntries([]); setLoadError(null); setActionError(null);
+      setLoading(true); setLoadedPath(null); setLoadedIdentity(null); setCarryReady(true);
       setListEpoch((n) => n + 1);
       return;
     }
     if (prevSnap.current === snapshotId) return;
     prevSnap.current = snapshotId;
+    const hit = showHitRef.current;
+    if (hit && hit.snapshotId === snapshotId) {
+      pendingShow.current = hit;
+      beginCarry(parentDirOf(hit.path));
+      return;
+    }
+    pendingShow.current = null;
     beginCarry(pathRef.current);
   }, [repoName, snapshotId]);
 
@@ -91,9 +130,9 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     let discarded = false;
     const requestedPath = path;
     const requestedIdentity = activeIdentity;
-    const hit = peekListDir(repoName, snapshotId, requestedPath);
-    if (hit) {
-      setEntries(hit);
+    const cached = peekListDir(repoName, snapshotId, requestedPath);
+    if (cached) {
+      setEntries(cached);
       setLoadedPath(requestedPath);
       setLoadedIdentity(requestedIdentity);
       setLoadError(null);
@@ -101,7 +140,6 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
       setLoading(false);
       return;
     }
-
     setLoading(true);
     setSelection(null);
     setLoadError(null);
@@ -138,14 +176,6 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     else setPath(next);
   }
 
-  const listingCurrent =
-    loadedPath === path && loadedIdentity === activeIdentity;
-  const listingReady =
-    carryReady &&
-    !loading &&
-    listingCurrent &&
-    !loadError &&
-    !carryError;
   const showStaleListing =
     !listingReady &&
     entries.length > 0 &&
@@ -154,23 +184,9 @@ export function useExplorerBrowse(repoName: string, snapshotId: string) {
     (loading || !carryReady);
 
   return {
-    path,
-    entries,
-    selection,
-    loadError,
-    actionError,
-    setActionError,
-    carryNote,
-    carryError,
-    carryRequested,
-    loading,
-    carryReady,
-    listingReady,
-    showStaleListing,
-    navigateTo,
-    setSelection,
-    // Join any in-flight list_dir (e.g. tree Retry already started); failures are
-    // not cached, so loadListDir starts fresh only when nothing is pending.
+    path, entries, selection, loadError, actionError, setActionError,
+    carryNote, carryError, carryRequested, loading, carryReady, listingReady,
+    showStaleListing, navigateTo, setSelection,
     retryListing: () => navigateTo(path),
     retryCarry: () => beginCarry(carryRequested ?? path),
   };

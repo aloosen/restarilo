@@ -191,6 +191,18 @@ With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config
 7. **Export overwrite confirm (manual):** with a file already at the export path, Export → confirm overwrite → succeeds and replaces; decline leaves the existing file unchanged. While the overwrite modal is open, repo/snapshot controls and listing selection are disabled; confirm starts a **new** action id (Cancel enabled again for the second attempt).
 8. Repeat Cancel checks on the SFTP repo.
 
+### Snapshot file search (manual)
+
+With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config.toml`:
+
+1. Open search with **Ctrl/Cmd+F** (Escape closes while idle). Enter runs the query; scope defaults to the **current snapshot** (toggle **All snapshots** for the whole repo).
+2. Queries without wildcards are substring-wrapped (`report` → `*report*`). Path-like `documents/report` becomes `**/documents/**/*report*`; a single segment with `/` (`documents/`) wraps like a basename. Explicit globs (`*`, `?`, `[…]`) pass through. Restic `*` does not cross `/`. The backend passes `--` before the pattern so leading-dash globs are not flags.
+3. At most **200** matches are listed; more than 200 shows “too many matches — refine your query”. The killable runner still buffers full `find` stdout (display cap only).
+4. **Show** switches snapshot when needed and opens the parent folder; the row is selected only after that listing is ready (no stuck tree spinner).
+5. **Export** from a hit uses the same dump flow as the explorer (file → file, directory → `.zip`), including overwrite confirm / busy / cancel.
+6. Cancel an in-flight search (BusyModal Cancel or Escape while Searching…) — no error toast. First search on SFTP can be slow (similar to a cold tree walk); all-snapshots is typically slower.
+7. Repeat on the SFTP repo.
+
 ## Icons (Tabler)
 
 Listing, tree, and action icons are [Tabler Icons](https://github.com/tabler/tabler-icons) (outline), MIT License, Copyright (c) 2020-2026 Paweł Kuna. SVG sources and `LICENSE` / `NOTICE` live under `src/icons/tabler/`; the same license texts are copied into `public/licenses/tabler-icons/` for distributions (`dist/licenses/…` after `npm run build`).
