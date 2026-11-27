@@ -124,6 +124,7 @@ pub fn run() {
             commands::restore_path,
             commands::dump_path,
             commands::open_path,
+            commands::find_paths,
             folder_debug::folder_debug_path,
             folder_debug::folder_debug_fe
         ])

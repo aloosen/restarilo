@@ -59,3 +59,4 @@ pub fn cancel_action(action_id: String) -> Result<(), String> {
 }
 
 include!("commands_actions.in.rs");
+include!("commands_find.in.rs");
