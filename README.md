@@ -195,8 +195,8 @@ With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config
 
 With the same `FIX=/tmp/restarilo-z1` repos (local + SFTP) configured in `config.toml`:
 
-1. Open search with **Ctrl/Cmd+F** (Escape closes while idle). Enter runs the query; scope defaults to the **current snapshot** (toggle **All snapshots** for the whole repo).
-2. Queries without wildcards are substring-wrapped (`report` → `*report*`). Path-like `documents/report` becomes `**/documents/**/*report*`; a single segment with `/` (`documents/`) wraps like a basename. Explicit globs (`*`, `?`, `[…]`) pass through. Restic `*` does not cross `/`. The backend passes `--` before the pattern so leading-dash globs are not flags.
+1. Open search with the **Search** button beside Restore/Export/Open, or **Ctrl/Cmd+F** (Escape closes while idle). Enter runs the query; scope defaults to the **current snapshot** (toggle **All snapshots** for the whole repo).
+2. Queries without wildcards are substring-wrapped (`report` → `*report*`). Path-like `documents/report` becomes `**/documents/**/*report*`; a single segment with `/` (`documents/`) wraps like a basename. Explicit globs (`*`, `?`, `[…]`) pass through. Restic `*` does not cross `/`. The backend passes `--` before the pattern so leading-dash globs are not flags. Results are filtered to **direct name hits** (basename matches the query) so searching a folder name does not list every file under that folder.
 3. At most **200** matches are listed; more than 200 shows “too many matches — refine your query”. The killable runner still buffers full `find` stdout (display cap only).
 4. **Show** switches snapshot when needed and opens the parent folder; the row is selected only after that listing is ready (no stuck tree spinner).
 5. **Export** from a hit uses the same dump flow as the explorer (file → file, directory → `.zip`), including overwrite confirm / busy / cancel.

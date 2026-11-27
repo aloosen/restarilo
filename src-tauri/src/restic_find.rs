@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::find_pattern::rewrite_find_pattern;
+use crate::find_pattern::{is_direct_name_hit, rewrite_find_pattern};
 use crate::restic_killable::{ensure_slot, release_action, run_restic_killable};
 use serde::{Deserialize, Serialize};
 
@@ -45,10 +45,13 @@ fn basename(path: &str) -> String {
     }
 }
 
-fn flatten_groups(groups: Vec<FindGroup>) -> Vec<FindMatch> {
+fn flatten_groups(query: &str, groups: Vec<FindGroup>) -> Vec<FindMatch> {
     let mut out = Vec::new();
     for g in groups {
         for e in g.matches.unwrap_or_default() {
+            if !is_direct_name_hit(query, &e.path) {
+                continue;
+            }
             let is_dir = e.entry_type.as_deref() == Some("dir");
             out.push(FindMatch {
                 snapshot_id: g.snapshot.clone(),
@@ -85,6 +88,6 @@ pub fn find_paths(
         }
         let groups: Vec<FindGroup> = serde_json::from_str(trimmed)
             .map_err(|e| format!("invalid find JSON: {e}"))?;
-        Ok(flatten_groups(groups))
+        Ok(flatten_groups(query, groups))
     })
 }
