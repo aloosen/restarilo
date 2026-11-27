@@ -1,14 +1,16 @@
-export type ActionKind = "restore" | "export" | "open";
+export type ActionKind = "restore" | "export" | "open" | "search";
 
 export function busyLabelFor(kind: ActionKind): string {
   if (kind === "restore") return "Restoring…";
   if (kind === "export") return "Exporting…";
+  if (kind === "search") return "Searching…";
   return "Opening…";
 }
 
 export function successMessage(kind: ActionKind, dest: string): string {
   if (kind === "restore") return `Restored to ${dest}`;
   if (kind === "export") return `Exported to ${dest}`;
+  if (kind === "search") return dest;
   return `Opened ${dest}`;
 }
 

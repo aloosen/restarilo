@@ -8,10 +8,10 @@ import { FileBrowser } from "./FileBrowser";
 import { formatSnapshotLabel, formatSnapshotTopDirs } from "./formatSize";
 import { clearListDirCacheForRepo } from "./listDirCache";
 import { explorerEmptyMessage } from "./explorerEmptyMessage";
+import { useSearchAppWire } from "./useSearchAppWire";
 import { useSnapshotLoad } from "./useSnapshotLoad";
 
 type RepoName = { name: string };
-
 type HeldExplorer = {
   repoName: string;
   snapshotId: string;
@@ -30,16 +30,8 @@ function App() {
   const actionBusy = actionId !== null;
   const chromeLocked = actionBusy || overwriteOpen;
   const {
-    snapshots,
-    selectedSnapshot,
-    snapError,
-    shareStatus,
-    loading,
-    retryList,
-    selectSnapshotId,
-    prepareRepoSwitch,
-    signIn,
-    tryAnotherAccount,
+    snapshots, selectedSnapshot, snapError, shareStatus, loading,
+    retryList, selectSnapshotId, prepareRepoSwitch, signIn, tryAnotherAccount,
   } = useSnapshotLoad(selectedRepo);
 
   useEffect(() => {
@@ -78,22 +70,10 @@ function App() {
     setSelectedRepo(name);
   }
 
-  const emptyRepo =
-    !loading &&
-    !snapError &&
-    !shareStatus &&
-    selectedRepo !== "" &&
-    snapshots.length === 0;
-  const liveRepo =
-    selectedSnapshot && !snapError && !shareStatus ? selectedRepo : null;
-  const liveSnapId =
-    selectedSnapshot && !snapError && !shareStatus
-      ? selectedSnapshot.id
-      : null;
-  const liveSnapLabel =
-    selectedSnapshot && !snapError && !shareStatus
-      ? formatSnapshotLabel(selectedSnapshot)
-      : null;
+  const okSnap = selectedSnapshot && !snapError && !shareStatus;
+  const liveRepo = okSnap ? selectedRepo : null;
+  const liveSnapId = okSnap ? selectedSnapshot.id : null;
+  const liveSnapLabel = okSnap ? formatSnapshotLabel(selectedSnapshot) : null;
 
   useEffect(() => {
     if (liveRepo && liveSnapId && liveSnapLabel) {
@@ -113,13 +93,23 @@ function App() {
   const topDirs = selectedSnapshot
     ? formatSnapshotTopDirs(selectedSnapshot.paths)
     : "";
-
   const emptyMsg = explorerEmptyMessage({
     configError,
     zeroRepos,
     shareStatus: !!shareStatus,
     snapError: !!snapError,
-    emptyRepo,
+    emptyRepo:
+      !loading && !snapError && !shareStatus && !!selectedRepo &&
+      snapshots.length === 0,
+  });
+  const search = useSearchAppWire({
+    enabled: showExplorer && !switching,
+    repoName: heldExplorer?.repoName ?? selectedRepo,
+    snapshotId: heldExplorer?.snapshotId ?? null,
+    snapshots,
+    actionBusy,
+    onActionId: setActionId,
+    onBusyLabel: setBusyLabel,
   });
 
   return (
@@ -129,64 +119,39 @@ function App() {
           <ArchiveMark />
           <span className="app-brand-name">restarilo</span>
         </div>
-        <div
-          className="app-chrome-paths"
-          title={selectedSnapshot?.paths?.join("\n")}
-          aria-live="polite"
-        >
+        <div className="app-chrome-paths" title={selectedSnapshot?.paths?.join("\n")} aria-live="polite">
           {topDirs || "\u00a0"}
         </div>
         <div className="app-chrome-controls">
           <ExplorerChromeControls
-            configError={configError}
-            zeroRepos={zeroRepos}
-            repos={repos}
-            selectedRepo={selectedRepo}
-            onSelectRepo={onSelectRepo}
-            chromeLocked={chromeLocked}
-            snapshots={snapshots}
-            selectedSnapshotId={selectedSnapshot?.id ?? null}
-            loading={loading}
-            snapError={snapError}
-            onSelectSnapshotId={selectSnapshotId}
-            onRetryList={retryList}
-            shareStatus={shareStatus}
-            onSignIn={signIn}
-            onTryAnotherAccount={tryAnotherAccount}
+            configError={configError} zeroRepos={zeroRepos} repos={repos}
+            selectedRepo={selectedRepo} onSelectRepo={onSelectRepo}
+            chromeLocked={chromeLocked} snapshots={snapshots}
+            selectedSnapshotId={selectedSnapshot?.id ?? null} loading={loading}
+            snapError={snapError} onSelectSnapshotId={selectSnapshotId}
+            onRetryList={retryList} shareStatus={shareStatus}
+            onSignIn={signIn} onTryAnotherAccount={tryAnotherAccount}
           />
         </div>
       </header>
-      {actionBusy && (
-        <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />
-      )}
-
+      {actionBusy && <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />}
+      {search.overlay}
       <section className="explorer">
         {showExplorer && heldExplorer ? (
-          <div
-            className={
-              switching ? "explorer-hold is-switching" : "explorer-hold"
-            }
-          >
+          <div className={switching ? "explorer-hold is-switching" : "explorer-hold"}>
             {switching && (
-              <p className="app-loading explorer-switch-note" role="status">
-                Loading snapshots…
-              </p>
+              <p className="app-loading explorer-switch-note" role="status">Loading snapshots…</p>
             )}
             <FileBrowser
-              repoName={heldExplorer.repoName}
-              snapshotId={heldExplorer.snapshotId}
+              repoName={heldExplorer.repoName} snapshotId={heldExplorer.snapshotId}
               snapshotLabel={heldExplorer.snapshotLabel}
-              actionBusy={actionBusy || switching}
-              overwriteOpen={overwriteOpen}
-              onActionId={setActionId}
-              onBusyLabel={setBusyLabel}
+              actionBusy={actionBusy || switching} overwriteOpen={overwriteOpen}
+              onActionId={setActionId} onBusyLabel={setBusyLabel}
               onOverwriteOpenChange={setOverwriteOpen}
             />
           </div>
         ) : (
-          <div className="explorer-listing">
-            <p className="app-loading">{emptyMsg}</p>
-          </div>
+          <div className="explorer-listing"><p className="app-loading">{emptyMsg}</p></div>
         )}
       </section>
     </main>
