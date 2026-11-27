@@ -30,6 +30,8 @@ function App() {
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [heldExplorer, setHeldExplorer] = useState<HeldExplorer | null>(null);
   const [showHitRequest, setShowHitRequest] = useState<ShowHitRequest | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionFail, setActionFail] = useState<string | null>(null);
   const actionBusy = actionId !== null;
   const chromeLocked = actionBusy || overwriteOpen;
   const {
@@ -70,6 +72,8 @@ function App() {
     if (name === selectedRepo) return;
     clearListDirCacheForRepo(selectedRepo);
     prepareRepoSwitch();
+    setActionSuccess(null);
+    setActionFail(null);
     setSelectedRepo(name);
   }
 
@@ -126,6 +130,14 @@ function App() {
     onActionId: setActionId,
     onBusyLabel: setBusyLabel,
     onOverwriteOpenChange: setOverwriteOpen,
+    onSuccess: (m) => {
+      setActionSuccess(m);
+      setActionFail(null);
+    },
+    onError: (m) => {
+      setActionFail(m);
+      setActionSuccess(null);
+    },
     onShowHit,
   });
 
@@ -151,9 +163,15 @@ function App() {
           />
         </div>
       </header>
-      {actionBusy && <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />}
       {search.overlay}
+      {actionBusy && <BusyModal label={busyLabel ?? "Working…"} onCancel={onCancel} />}
       <section className="explorer">
+        {!search.open && actionSuccess && (
+          <p className="app-success app-action-feedback">{actionSuccess}</p>
+        )}
+        {!search.open && actionFail && (
+          <pre className="app-error app-action-feedback">{actionFail}</pre>
+        )}
         {showExplorer && heldExplorer ? (
           <div className={switching ? "explorer-hold is-switching" : "explorer-hold"}>
             {switching && (

@@ -1,5 +1,10 @@
 @import "./Explorer.css";
 
+.app-action-feedback {
+  margin: 0;
+  padding: 8px 22px 0;
+}
+
 :root {
   color-scheme: light dark;
   --bg: #fffdfa;

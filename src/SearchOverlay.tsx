@@ -18,6 +18,7 @@ type Props = {
   matches: SearchHit[] | null;
   truncated: boolean;
   error: string | null;
+  notice: string | null;
   searching: boolean;
   labelForSnapshot: (id: string) => string;
   onClose: () => void;
@@ -103,15 +104,18 @@ export function SearchOverlay(p: Props) {
         </div>
         <div className="search-results" aria-live="polite">
           {p.searching && <p className="search-status">Searching…</p>}
+          {!p.searching && p.notice && (
+            <p className="search-notice app-success">{p.notice}</p>
+          )}
           {!p.searching && p.error && (
             <p className="search-error" role="alert">
               {p.error}
             </p>
           )}
-          {!p.searching && !p.error && p.matches && p.matches.length === 0 && (
+          {!p.searching && p.matches && p.matches.length === 0 && (
             <p className="search-status">No matches</p>
           )}
-          {!p.searching && !p.error && p.matches && p.matches.length > 0 && (
+          {!p.searching && p.matches && p.matches.length > 0 && (
             <>
               {p.truncated && (
                 <p className="search-status">

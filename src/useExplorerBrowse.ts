@@ -54,18 +54,9 @@ export function useExplorerBrowse(
     showHit,
     snapshotId,
     path,
-    pathRef,
     listingReady,
     entries,
-    setPath,
     setSelection,
-    setListEpoch,
-    setCarryReady,
-    setCarryNote,
-    setCarryError,
-    setCarryRequested,
-    setLoadError,
-    carryGen,
     onShowHitConsumed,
   });
 
@@ -99,6 +90,17 @@ export function useExplorerBrowse(
     );
   }
 
+  function navigateTo(next: string) {
+    carryGen.current += 1;
+    setCarryReady(true);
+    setCarryNote(null);
+    setCarryError(null);
+    setCarryRequested(null);
+    setLoadError(null);
+    if (next === pathRef.current) setListEpoch((n) => n + 1);
+    else setPath(next);
+  }
+
   useEffect(() => {
     if (prevRepo.current !== repoName) {
       clearListDirCacheForRepo(prevRepo.current);
@@ -125,23 +127,33 @@ export function useExplorerBrowse(
     beginCarry(pathRef.current);
   }, [repoName, snapshotId]);
 
+  // Same-snapshot Show: open parent. Skip while a snapshot carry is in flight
+  // so we do not cancel cross-snapshot beginCarry(parent).
+  useEffect(() => {
+    if (!showHit || showHit.snapshotId !== snapshotId || !carryReady) return;
+    const parent = parentDirOf(showHit.path);
+    if (pathRef.current === parent) return;
+    navigateTo(parent);
+  }, [showHit, snapshotId, carryReady]);
+
   useEffect(() => {
     if (!carryReady) return;
     let discarded = false;
     const requestedPath = path;
     const requestedIdentity = activeIdentity;
     const cached = peekListDir(repoName, snapshotId, requestedPath);
+    const keepSel = pendingShow.current !== null;
     if (cached) {
       setEntries(cached);
       setLoadedPath(requestedPath);
       setLoadedIdentity(requestedIdentity);
       setLoadError(null);
-      setSelection(null);
+      if (!keepSel) setSelection(null);
       setLoading(false);
       return;
     }
     setLoading(true);
-    setSelection(null);
+    if (!keepSel) setSelection(null);
     setLoadError(null);
     loadListDir(repoName, snapshotId, requestedPath)
       .then((rows) => {
@@ -164,17 +176,6 @@ export function useExplorerBrowse(
       discarded = true;
     };
   }, [repoName, snapshotId, path, activeIdentity, carryReady, listEpoch]);
-
-  function navigateTo(next: string) {
-    carryGen.current += 1;
-    setCarryReady(true);
-    setCarryNote(null);
-    setCarryError(null);
-    setCarryRequested(null);
-    setLoadError(null);
-    if (next === pathRef.current) setListEpoch((n) => n + 1);
-    else setPath(next);
-  }
 
   const showStaleListing =
     !listingReady &&

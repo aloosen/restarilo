@@ -15,42 +15,43 @@ export function parentDirOf(path: string): string {
   return i <= 0 ? "/" : trimmed.slice(0, i);
 }
 
-/** Tracks a pending show-hit and applies selection when listing is ready. */
+function selectHit(
+  entries: DirEntry[],
+  pending: ShowHitRequest,
+  setSelection: Dispatch<SetStateAction<FileSelection | null>>,
+): boolean {
+  const entry = entries.find(
+    (e) => e.path === pending.path || e.name === pending.name,
+  );
+  if (!entry) return false;
+  setSelection({
+    path: entry.path,
+    name: entry.name,
+    is_dir: entry.is_dir,
+  });
+  return true;
+}
+
+/**
+ * Holds a show-hit until listingReady for that snapshot+parent, then selects.
+ * Navigation is owned by useExplorerBrowse (same-snap navigate / cross-snap carry).
+ */
 export function usePendingShowHit(opts: {
   showHit: ShowHitRequest | null;
   snapshotId: string;
   path: string;
-  pathRef: { current: string };
   listingReady: boolean;
   entries: DirEntry[];
-  setPath: Dispatch<SetStateAction<string>>;
   setSelection: Dispatch<SetStateAction<FileSelection | null>>;
-  setListEpoch: Dispatch<SetStateAction<number>>;
-  setCarryReady: Dispatch<SetStateAction<boolean>>;
-  setCarryNote: Dispatch<SetStateAction<string | null>>;
-  setCarryError: Dispatch<SetStateAction<string | null>>;
-  setCarryRequested: Dispatch<SetStateAction<string | null>>;
-  setLoadError: Dispatch<SetStateAction<string | null>>;
-  carryGen: { current: number };
   onShowHitConsumed?: () => void;
 }): { current: ShowHitRequest | null } {
   const pendingShow = useRef<ShowHitRequest | null>(null);
-  const showHitRef = useRef(opts.showHit);
-  showHitRef.current = opts.showHit;
+  const consumedRef = useRef(opts.onShowHitConsumed);
+  consumedRef.current = opts.onShowHitConsumed;
 
   useEffect(() => {
     if (!opts.showHit || opts.showHit.snapshotId !== opts.snapshotId) return;
     pendingShow.current = opts.showHit;
-    const parent = parentDirOf(opts.showHit.path);
-    if (opts.pathRef.current !== parent) {
-      opts.carryGen.current += 1;
-      opts.setCarryReady(true);
-      opts.setCarryNote(null);
-      opts.setCarryError(null);
-      opts.setCarryRequested(null);
-      opts.setLoadError(null);
-      opts.setPath(parent);
-    } else opts.setListEpoch((n) => n + 1);
   }, [opts.showHit, opts.snapshotId]);
 
   useEffect(() => {
@@ -58,31 +59,16 @@ export function usePendingShowHit(opts: {
     if (!pending || !opts.listingReady) return;
     if (pending.snapshotId !== opts.snapshotId) return;
     if (opts.path !== parentDirOf(pending.path)) return;
-    const entry = opts.entries.find(
-      (e) => e.path === pending.path || e.name === pending.name,
-    );
-    if (entry) {
-      opts.setSelection({
-        path: entry.path,
-        name: entry.name,
-        is_dir: entry.is_dir,
-      });
-    }
+    if (!selectHit(opts.entries, pending, opts.setSelection)) return;
     pendingShow.current = null;
-    opts.onShowHitConsumed?.();
+    consumedRef.current?.();
   }, [
     opts.listingReady,
     opts.entries,
     opts.path,
     opts.snapshotId,
-    opts.onShowHitConsumed,
+    opts.setSelection,
   ]);
 
   return pendingShow;
-}
-
-export function showHitRefCurrent(
-  showHitRef: { current: ShowHitRequest | null },
-): ShowHitRequest | null {
-  return showHitRef.current;
 }

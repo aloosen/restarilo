@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   SearchOverlay,
   type SearchHit,
@@ -34,7 +34,9 @@ export function useSearchAppWire(opts: {
   const [matches, setMatches] = useState<SearchHit[] | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [matchesRepo, setMatchesRepo] = useState<string | null>(null);
 
   const onOpen = useCallback(() => setOpen(true), []);
   const onCloseIdle = useCallback(() => setOpen(false), []);
@@ -47,17 +49,25 @@ export function useSearchAppWire(opts: {
     onCloseIdle,
   });
 
+  useEffect(() => {
+    setMatches(null);
+    setTruncated(false);
+    setError(null);
+    setNotice(null);
+    setMatchesRepo(null);
+  }, [opts.repoName]);
+
   async function onSearch() {
     if (!opts.repoName || opts.actionBusy || searching) return;
     const q = query.trim();
     if (!q) return;
     setSearching(true);
     setError(null);
+    setNotice(null);
     setMatches(null);
     setTruncated(false);
     try {
-      const snap =
-        mode === "current" ? opts.snapshotId : null;
+      const snap = mode === "current" ? opts.snapshotId : null;
       if (mode === "current" && !snap) {
         setError("No snapshot selected");
         return;
@@ -76,6 +86,7 @@ export function useSearchAppWire(opts: {
       const capped = capMatches(all);
       setMatches(capped.shown);
       setTruncated(capped.truncated);
+      setMatchesRepo(opts.repoName);
     } catch (e: unknown) {
       const msg = String(e);
       if (msg.includes("CANCELLED:")) {
@@ -90,6 +101,7 @@ export function useSearchAppWire(opts: {
 
   function onExportHit(hit: SearchHit) {
     if (opts.actionBusy || !opts.repoName) return;
+    if (matchesRepo && matchesRepo !== opts.repoName) return;
     void exportSearchHit({
       repoName: opts.repoName,
       hit,
@@ -98,12 +110,29 @@ export function useSearchAppWire(opts: {
         onActionId: opts.onActionId,
         onBusyLabel: opts.onBusyLabel,
         onOverwriteOpenChange: opts.onOverwriteOpenChange,
-        onSuccess: opts.onSuccess,
-        onError: opts.onError,
+        onSuccess: (message) => {
+          setNotice(message);
+          setError(null);
+          opts.onSuccess?.(message);
+        },
+        onError: (message) => {
+          // Keep matches visible so Show/Export stay available after a failed export.
+          setNotice(null);
+          setError(message);
+          opts.onError?.(message);
+        },
       },
       askOverwrite,
     });
   }
+
+  function onShowHit(hit: SearchHit) {
+    setOpen(false);
+    opts.onShowHit?.(hit);
+  }
+
+  const shownMatches =
+    matches && matchesRepo === opts.repoName ? matches : null;
 
   const overlay = (
     <>
@@ -112,16 +141,17 @@ export function useSearchAppWire(opts: {
         mode={mode}
         query={query}
         actionBusy={opts.actionBusy}
-        matches={matches}
-        truncated={truncated}
+        matches={shownMatches}
+        truncated={truncated && shownMatches !== null}
         error={error}
+        notice={notice}
         searching={searching}
         labelForSnapshot={(id) => labelForSnapshot(id, opts.snapshots)}
         onClose={onCloseIdle}
         onModeChange={setMode}
         onQueryChange={setQuery}
         onSearch={() => void onSearch()}
-        onShowHit={opts.onShowHit}
+        onShowHit={onShowHit}
         onExportHit={onExportHit}
       />
       {overwriteModal}
