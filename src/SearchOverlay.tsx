@@ -46,6 +46,10 @@ export function SearchOverlay(p: Props) {
   }, [p.open, p.canCancel, p.searching, p.covered, p.input]);
   if (!p.open) return null;
 
+  let progressLabel = "Searching current snapshot…";
+  if (p.mode === "all") progressLabel = "Searching all snapshots…";
+  if (p.cancelling) progressLabel = "Cancelling search…";
+
   return (
     <div className="search-dimmer" role="presentation">
       <div
@@ -88,10 +92,13 @@ export function SearchOverlay(p: Props) {
             All snapshots
           </label>
         </div>
-        <form className="search-row" onSubmit={(event) => {
-          event.preventDefault();
-          if (p.canSearch) p.onSearch();
-        }}>
+        <form
+          className="search-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (p.canSearch) p.onSearch();
+          }}
+        >
           <input
             ref={p.input}
             type="search"
@@ -103,8 +110,10 @@ export function SearchOverlay(p: Props) {
             onChange={(e) => p.onQueryChange(e.target.value)}
           />
           {p.searching ? (
-            <button type="button" className="search-close" ref={cancelButton}
-              onClick={p.cancel} disabled={!p.canCancel || p.cancelling}>
+            <button
+              type="button" className="search-close" ref={cancelButton}
+              onClick={p.cancel} disabled={!p.canCancel || p.cancelling}
+            >
               Cancel
             </button>
           ) : (
@@ -115,8 +124,7 @@ export function SearchOverlay(p: Props) {
           <div className="search-progress" role="status">
             <span className="search-spinner" aria-hidden="true" />
             <div>
-              <strong>{p.cancelling ? "Cancelling search…" :
-                p.mode === "all" ? "Searching all snapshots…" : "Searching current snapshot…"}</strong>
+              <strong>{progressLabel}</strong>
               {!p.cancelling && p.mode === "all" && (
                 <p className="search-status">This can take longer on remote repositories.</p>
               )}

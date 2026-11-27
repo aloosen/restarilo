@@ -49,6 +49,8 @@ export function useExplorerBrowse(
     loadedListing.epoch === listEpoch;
   const listingReady =
     carryReady && !loading && listingCurrent && !loadError && !carryError;
+  const waitingForHitFolder =
+    showHit?.snapshotId === snapshotId && parentDirOf(showHit.path) !== path;
 
   usePendingShowHit({
     showHit,
@@ -125,7 +127,7 @@ export function useExplorerBrowse(
   }, [repoName, snapshotId, showHit]);
 
   useEffect(() => {
-    if (!carryReady) return;
+    if (!carryReady || waitingForHitFolder) return;
     let discarded = false;
     const requestedPath = path;
     const requestedListing = { path, identity: activeIdentity, epoch: listEpoch };
@@ -159,7 +161,7 @@ export function useExplorerBrowse(
     return () => {
       discarded = true;
     };
-  }, [repoName, snapshotId, path, activeIdentity, carryReady, listEpoch]);
+  }, [repoName, snapshotId, path, activeIdentity, carryReady, listEpoch, waitingForHitFolder]);
 
   const showStaleListing =
     !listingReady &&
